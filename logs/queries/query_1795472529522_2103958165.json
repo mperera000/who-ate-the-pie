@@ -1,0 +1,13 @@
+{
+  "query": "SELECT * FROM analytics.endings",
+  "query_start_timestamp": "2026-11-23T14:22:09.52216-08:00",
+  "connection": "duckdb-default",
+  "timeout": 1000,
+  "columns": ["ending","films"],
+  "rows": [
+    ["case_closed",1],
+    ["caught_denying",1]
+  ],
+  "timestamp": "2026-11-23T14:22:09.529667-08:00",
+  "success": true
+}

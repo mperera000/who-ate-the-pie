@@ -7,22 +7,23 @@
     <meta name="description" content="Detective Goldilocks interrogates the Three Bears. AI agents decide every choice, so every film ends differently." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="bar">
       <div class="brand">
-        <img class="brand-face" src="/assets/characters/goldilocks-1.png" alt="" />
+        <img class="brand-face" src="/assets/cutouts/goldilocks.png" alt="" />
         <div>
+          <p class="eyebrow">Case file · Forest Police Dept.</p>
           <h1>Who Ate the Pie?</h1>
-          <p>Detective Goldilocks and the Three Bears. AI agents decide every choice, so every film ends differently.</p>
+          <p>Detective Goldilocks questions the Three Bears. Four AI agents decide every move, so no two films end the same.</p>
         </div>
       </div>
       <div class="controls">
-        <button id="new" class="btn btn-primary">✨ Make a new film</button>
-        <button id="record" class="btn" title="Plays the film from the start and saves it as a video file">⏺ Record &amp; download</button>
-        <button id="play" class="btn">▶ Play</button>
+        <button id="new" class="btn btn-primary">Open a new case</button>
+        <button id="record" class="btn" title="Plays the film from the start and saves it as a video file">Record &amp; download</button>
+        <button id="play" class="btn">Replay</button>
         <select id="runs" aria-label="Choose a past case"></select>
         <select id="speed" aria-label="Playback speed">
           <option value="1">1×</option>
@@ -41,8 +42,9 @@
       <section class="theatre">
         <div id="stage" class="stage">
           <div id="camera" class="camera">
-            <img class="set" src="/assets/scenes/cabin-3.png" alt="The Three Bears' log cabin" />
+            <img class="set" src="/assets/scenes/cabin-2.png" alt="The Three Bears' log cabin" />
             <svg id="wires" class="wires" viewBox="0 0 100 56.25" preserveAspectRatio="none"></svg>
+            <svg id="crumbs" class="crumbs" viewBox="0 0 100 56.25" preserveAspectRatio="none"></svg>
             <div id="actors"></div>
           </div>
           <div id="night" class="night"></div>
@@ -55,13 +57,17 @@
           <div id="caption" class="caption" hidden></div>
           <div id="title" class="title-card" hidden></div>
           <div id="end" class="end-card" hidden></div>
+          <div id="stamp" class="stamp" hidden></div>
           <div id="rec" class="rec" hidden>● REC</div>
         </div>
 
-        <div class="suspicion">
-          <h2>Goldilocks's suspicion</h2>
-          <div id="meters" class="meters"></div>
-        </div>
+        <section class="caseboard">
+          <div class="board-head">
+            <h2>Case board</h2>
+            <div id="meters" class="meters" aria-label="Goldilocks's suspicion"></div>
+          </div>
+          <div id="board" class="board"></div>
+        </section>
       </section>
 
       <aside class="ledger">

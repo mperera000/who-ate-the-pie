@@ -81,9 +81,24 @@ const answerSchema = (id: SuspectId) =>
     reason: z.string().describe("Your real motive for answering this way, one sentence"),
     mood,
     move_to: z.enum(["stay", "kitchen", "parlour", "bedroom"]).describe("Where you walk off to after answering, or stay"),
+    blurt_secret: nobodyOr([KNOWS[id]]).describe("Blurt out the secret you know about another bear to shift suspicion (dramatic!), or nobody"),
     whisper_to: nobodyOr(others(id)).describe("Privately message one other bear afterwards, or nobody"),
     whisper: z.string().describe("The private message, 12 words or fewer, empty if nobody"),
   });
+
+// Each bear knows one other bear's secret, and may blurt it out to deflect.
+const KNOWS: Record<SuspectId, SuspectId> = { papa: "mama", mama: "baby", baby: "papa" };
+const SECRET_SLIP: Record<SuspectId, string> = {
+  mama: "Mama's 'homemade' pie came from the forest bakery!",
+  papa: "Papa's on a strict diet and he's been sneaking snacks all week!",
+  baby: "Baby broke Mama's antique porridge bowl and hid it under his bed!",
+};
+
+const verdictSchema = z.object({
+  verdict: z.enum(["too_hot", "too_cold", "just_right"]).describe("Your famous test: too_hot = you think it's a lie, too_cold = evasive, just_right = you believe it"),
+  quip: z.string().describe("Your verdict out loud, Goldilocks-style, 8 words or fewer, e.g. 'Too hot! That answer is burning with lies.'"),
+  reason: z.string().describe("Why, one sentence"),
+});
 
 const accuseSchema = z.object({
   accused: z.enum(SUSPECTS),
@@ -146,7 +161,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
   const voices: Promise<void>[] = [];
   const voiced = (b: Beat) =>
     Boolean(b.line) &&
-    ["say", "accuse", "respond", "react", "narrate", "reveal"].includes(b.kind) &&
+    ["say", "accuse", "respond", "react", "narrate", "reveal", "evidence", "verdict", "secret"].includes(b.kind) &&
     b.scene !== "cast" &&
     !(b.kind === "reveal" && b.actor !== "narrator") &&
     !b.line!.startsWith("Same setup") &&
@@ -181,6 +196,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
   try {
     const memory = Object.fromEntries(CAST.map((c) => [c.id, [] as string[]])) as Record<CharacterId, string[]>;
     const spoken: string[] = [];
+    for (const s of SUSPECTS) memory[s].push(`You happen to know ${nameOf(KNOWS[s])}'s secret: ${SECRET_SLIP[KNOWS[s]]}`);
 
     // ---- Opening: skills (Finch), memories, the casebook ----
     beat({ scene: "cast", kind: "title", actor: "narrator", line: "Who Ate the Pie?" });
@@ -304,21 +320,23 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     truth.culprits = SUSPECTS.filter((s) => truth.eaten[s] > 0 || truth.hiddenBy === s);
     beat({ scene: "morning", kind: "title", actor: "narrator", line: "The Morning After" });
     for (const s of SUSPECTS) move(s, "kitchen", "morning");
-    beat({ scene: "morning", kind: "narrate", actor: "narrator", line: "Morning. Mama screams. Knock, knock: Detective Goldilocks is here." });
     move("goldilocks", "kitchen", "morning");
 
     // Every clue below follows from a choice a bear made at midnight.
-    const evidence: string[] = [];
-    if (truth.culprits.length === 0) evidence.push("The pie is GONE. Only an empty tin remains, licked suspiciously clean.");
-    else if (truth.hiddenBy) evidence.push("The pie has vanished from the counter. Just a ring where the tin sat.");
-    else evidence.push(`Only ${truth.slicesLeft} of ${TOTAL_SLICES} slices remain.`);
-    for (const f of truth.framed) evidence.push(`There are crumbs all over ${nameOf(f.target)}'s chair.`);
+    const clues: { line: string; focus: NonNullable<Beat["focus"]> }[] = [];
+    if (truth.culprits.length === 0) clues.push({ line: "The pie is GONE. Only an empty tin, licked suspiciously clean.", focus: { kind: "pie" } });
+    else if (truth.hiddenBy) clues.push({ line: "The whole pie has vanished. Just a ring where the tin sat.", focus: { kind: "pie" } });
+    else clues.push({ line: `Only ${truth.slicesLeft} of ${TOTAL_SLICES} slices remain.`, focus: { kind: "pie" } });
     for (const v of truth.visits) {
-      if (v.choice.startsWith("eat") && !v.cleanedUp) evidence.push(`There's pumpkin filling stuck in ${nameOf(v.id)}'s fur.`);
+      if (v.choice.startsWith("eat") && !v.cleanedUp) clues.push({ line: `A trail of crumbs leads from the kitchen… to ${nameOf(v.id)}'s chair.`, focus: { kind: "trail", who: v.id } });
     }
-    if (evidence.length === 1) evidence.push("Not a single other crumb anywhere. A professional job.");
-    evidence.splice(3);
-    beat({ scene: "morning", kind: "narrate", actor: "narrator", line: evidence.join(" "), pieSlices: truth.hiddenBy || truth.culprits.length === 0 ? 0 : truth.slicesLeft });
+    for (const f of truth.framed) clues.push({ line: `Crumbs all over ${nameOf(f.target)}'s chair.`, focus: { kind: "chair", who: f.target } });
+    if (clues.length === 1) clues.push({ line: "Not a single other crumb anywhere. A professional job.", focus: { kind: "pie" } });
+    clues.splice(2);
+    const evidence = clues.map((c) => c.line);
+    clues.forEach((c, k) => {
+      beat({ scene: "morning", kind: "evidence", actor: "narrator", line: c.line, focus: c.focus, exhibit: "ABC"[k], pieSlices: truth.hiddenBy || truth.culprits.length === 0 ? 0 : truth.slicesLeft });
+    });
     spoken.push(`Narrator: ${evidence.join(" ")}`);
     for (const c of CAST) memory[c.id].push(`This morning everyone saw: ${evidence.join(" ")}`);
 
@@ -365,6 +383,25 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
       spoken.push(`${nameOf(target)}: ${a.answer}`);
       memory[target].push(`You told Goldilocks: "${a.answer}"${a.is_lie ? " (a lie)" : ""}.`);
 
+      if (a.blurt_secret !== "nobody") {
+        const exposed = a.blurt_secret as SuspectId;
+        const line = `${nameOf(target)} blurts it out: ${SECRET_SLIP[exposed]}`;
+        beat({ scene: "interrogation", kind: "secret", actor: target, target: exposed, line, reason: "Deflecting suspicion onto someone else." });
+        spoken.push(`${nameOf(target)} (blurting): ${SECRET_SLIP[exposed]}`);
+        for (const c of CAST) memory[c.id].push(`Everyone just learned: ${SECRET_SLIP[exposed]}`);
+      }
+
+      // Goldilocks's "just right" test on the answer.
+      const { value: v, use: vUse } = await brain.decide(
+        "Goldilocks: just-right test",
+        verdictSchema,
+        system("goldilocks"),
+        `${nameOf(target)} just answered you: "${a.answer}"\n\n${context("goldilocks")}\n\nApply your famous test: is that answer too hot (a lie), too cold (evasive) or just right (true)?`,
+        () => ({ verdict: a.is_lie ? ("too_hot" as const) : ("just_right" as const), quip: a.is_lie ? "Too hot! That answer is burning with lies." : "Hmm. Just right.", reason: "Gut feeling." }),
+      );
+      beat({ scene: "interrogation", kind: "verdict", actor: "goldilocks", target, line: v.quip, reason: v.reason, verdict: v.verdict, sponsors: [vUse] });
+      spoken.push(`Detective Goldilocks: ${v.quip}`);
+
       if (a.whisper_to !== "nobody" && a.whisper.trim()) {
         const to = a.whisper_to as SuspectId;
         move(target, where[to], "interrogation");
@@ -395,7 +432,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
 
     // The other bears react, each in their own way.
     const reactions = await Promise.all(
-      others(accused).map(async (id) => {
+      others(accused).slice(0, 1).map(async (id) => {
         const { value, use } = await brain.decide(
           `${nameOf(id)}: reaction`,
           reactSchema,
@@ -422,9 +459,8 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     const ending = decideEnding(truth, accused, resp.confess);
     run.truth = truth;
     run.ending = ending;
-    beat({ scene: "reveal", kind: "title", actor: "narrator", line: ending.title });
-    beat({ scene: "reveal", kind: "reveal", actor: "narrator", line: ending.summary });
-    for (const v of truth.visits) {
+    beat({ scene: "reveal", kind: "title", actor: "narrator", line: "What Really Happened" });
+    for (const v of [...truth.visits].sort((x, y) => SNEAK_TIMES.indexOf(x.time) - SNEAK_TIMES.indexOf(y.time))) {
       const parts: string[] = [];
       if (v.choice === "stayed_in_bed") parts.push("stayed in bed all night");
       else parts.push(`crept down at ${v.time}`);
@@ -432,8 +468,10 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
       if (truth.hiddenBy === v.id) parts.push("hid the pie under Baby Bear's bed");
       if (v.frame) parts.push(`framed ${nameOf(v.frame)}`);
       if (v.choice !== "stayed_in_bed" && v.choice === "leave_it_alone" && !v.frame) parts.push("touched nothing");
-      beat({ scene: "reveal", kind: "reveal", actor: v.id, line: `${nameOf(v.id)} ${parts.join(", ")}.` });
+      beat({ scene: "reveal", kind: "flashback", actor: v.id, place: v.choice === "stayed_in_bed" ? "bedroom" : "kitchen", line: `${nameOf(v.id)} ${parts.join(", ")}.` });
     }
+    beat({ scene: "reveal", kind: "title", actor: "narrator", line: ending.title });
+    beat({ scene: "reveal", kind: "reveal", actor: "narrator", line: ending.summary });
 
     // ---- Wrap up: decision log (Bruin), voices, then save the case ----
     run.status = "done";

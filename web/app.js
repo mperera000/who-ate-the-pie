@@ -9,14 +9,18 @@ const SPOKEN = ["say", "accuse", "respond", "react", "narrate", "reveal"];
 
 // Rooms in the cabin set image (percent of the frame). floor = where feet go.
 const ROOMS = {
-  kitchen: { x: 15, y: 11, w: 34, h: 37, floor: 47 },
-  dining: { x: 52, y: 11, w: 34, h: 37, floor: 47 },
-  parlour: { x: 15, y: 53, w: 34, h: 39, floor: 91 },
-  bedroom: { x: 52, y: 53, w: 34, h: 39, floor: 91 },
-  outside: { x: 0, y: 55, w: 13, h: 40, floor: 93 },
+  kitchen: { x: 19, y: 21, w: 29, h: 29, floor: 49 },
+  dining: { x: 50, y: 21, w: 31, h: 29, floor: 49 },
+  parlour: { x: 19, y: 54, w: 29, h: 31, floor: 84.5 },
+  bedroom: { x: 50, y: 54, w: 31, h: 31, floor: 84.5 },
+  outside: { x: 0, y: 55, w: 14, h: 31, floor: 86 },
 };
+const PIE_AT = { x: 28, y: 40 };
 // Sprite heights, as % of the frame height (storybook sizes).
-const HEIGHT = { papa: 31, mama: 29, goldilocks: 22, baby: 18 };
+const HEIGHT = { papa: 24, mama: 23, goldilocks: 17, baby: 14 };
+// Reading time: every line stays up long enough to read comfortably.
+const READ = (s) => Math.max(4000, words(s) * 380);
+const GAP = 450;
 // Where each character stands inside a room, as a fraction of its width.
 const SPOT = { papa: 0.16, goldilocks: 0.42, mama: 0.64, baby: 0.86 };
 const WIDE = { s: 1, X: 0, Y: 0 };
@@ -40,8 +44,8 @@ async function init() {
   const runs = await refreshRuns(new URLSearchParams(location.search).get("case"));
   if (runs.length) await prepare(await fetchRun($("#runs").value));
   else {
-    $("#log").innerHTML = `<li class="empty">No films yet. Click <b>✨ Make a new film</b> and the agents will make one live.</li>`;
-    caption("Click ✨ Make a new film. Four AI agents will decide everything that happens.");
+    $("#log").innerHTML = `<li class="empty">No films yet. Click <b>Open a new case</b> and the agents will make one live.</li>`;
+    caption("Click Open a new case. Four AI agents decide everything that happens.");
   }
 }
 
@@ -77,6 +81,55 @@ function setCamera(shot) {
   state.shot = shot;
   $("#camera").style.transform = `translate(${shot.X}%, ${shot.Y}%) scale(${shot.s})`;
   return true;
+}
+
+// Tight shot on a clue: the pie, a bear's chair, or the whole crumb trail.
+function closeUp(focus) {
+  if (!focus) return shotFor("kitchen");
+  if (focus.kind === "trail") {
+    const s = 1.55;
+    return { s, X: Math.min(0, Math.max(100 - 100 * s, 50 - s * 34)), Y: Math.min(0, Math.max(100 - 100 * s, 50 - s * 58)) };
+  }
+  const p = focus.kind === "pie" ? PIE_AT : { x: ROOMS.parlour.x + ROOMS.parlour.w * (SPOT[focus.who] ?? 0.5), y: ROOMS.parlour.floor - 8 };
+  const s = 3.4;
+  const clamp = (v) => Math.min(0, Math.max(100 - 100 * s, v));
+  return { s, X: clamp(50 - s * p.x), Y: clamp(50 - s * p.y) };
+}
+
+// A wobbly line of crumbs from the pie, down the stairs, to a bear's chair.
+function crumbTrail(who) {
+  const end = { x: ROOMS.parlour.x + ROOMS.parlour.w * (SPOT[who] ?? 0.5), y: ROOMS.parlour.floor - 0.5 };
+  const start = { x: PIE_AT.x + 4, y: ROOMS.kitchen.floor - 0.5 };
+  const pts = [];
+  const steps = 30;
+  for (let k = 0; k <= steps; k++) {
+    const t = k / steps;
+    const x = start.x + (end.x - start.x) * t + Math.sin(t * 11) * 1.2;
+    const y = start.y + (end.y - start.y) * Math.min(1, Math.max(0, (t - 0.3) / 0.45));
+    pts.push(`<circle class="crumb" cx="${x.toFixed(2)}" cy="${(y * 0.5625).toFixed(2)}" r="${(0.22 + (k % 3) * 0.07).toFixed(2)}" style="animation-delay:${k * 55}ms"/>`);
+  }
+  $("#crumbs").innerHTML = pts.join("");
+}
+
+function stamp(text, cls = "") {
+  const el = $("#stamp");
+  el.textContent = text;
+  el.className = `stamp ${cls}`;
+  el.hidden = false;
+  void el.offsetWidth;
+  el.classList.add("slam");
+}
+
+// The case board: clues pinned as the film goes.
+function pin({ tag, text, kind = "clue", color }) {
+  const board = $("#board");
+  board.querySelector(".empty")?.remove();
+  const card = document.createElement("div");
+  card.className = `card ${kind}`;
+  if (color) card.style.setProperty("--c", color);
+  card.style.setProperty("--tilt", `${(Math.random() * 4 - 2).toFixed(1)}deg`);
+  card.innerHTML = `<span class="tag">${escapeHtml(tag)}</span>${escapeHtml(text)}`;
+  board.append(card);
 }
 
 const toStage = (p) => ({ x: state.shot.X + state.shot.s * p.x, y: state.shot.Y + state.shot.s * p.y });
@@ -144,7 +197,7 @@ function buildActors() {
   for (const c of state.run.cast) placeActor(c.id, c.role === "detective" ? "outside" : "bedroom");
   $("#meters").innerHTML = SUSPECTS.map((id) => {
     const c = state.cast[id];
-    return `<div class="meter" style="--c:${c.color}">${c.name}<div class="track"><div class="fill" id="meter-${id}"></div></div></div>`;
+    return `<div class="meter" style="--c:${c.color}"><span>${c.name.split(" ")[0]}</span><div class="track"><div class="fill" id="meter-${id}"></div></div></div>`;
   }).join("");
 }
 
@@ -184,6 +237,8 @@ function clearTransient() {
   $("#caption").hidden = true;
   $("#research").hidden = true;
   $("#wires").innerHTML = "";
+  $("#stamp").hidden = true;
+  $("#stage").classList.remove("clue-focus");
   document.querySelectorAll(".actor.speaking").forEach((a) => a.classList.remove("speaking"));
 }
 
@@ -233,12 +288,12 @@ const speed = () => Number($("#speed").value) || 1;
 const wait = (ms) => sleep(ms / speed());
 
 async function speak(beat, fallbackMs, token) {
-  if (beat.silent) return wait(Math.max(1500, words(beat.line) * 230));
+  if (beat.silent) return wait(READ(beat.line));
   // A voice clip may still be on its way from Runware: give it a moment.
   for (let t = 0; !beat.audio && state.run.status === "generating" && t < 3000 && token === state.token; t += 200) await sleep(200);
   if (beat.audio) {
     const audio = new Audio(beat.audio);
-    audio.playbackRate = 1.15 * speed();
+    audio.playbackRate = speed();
     state.audio = audio;
     await Promise.race([
       new Promise((r) => {
@@ -269,6 +324,15 @@ async function speak(beat, fallbackMs, token) {
   await wait(fallbackMs);
 }
 
+// Voice the line, but never move on before it's been readable for a while, then breathe.
+async function speakAtLeast(b, token) {
+  const started = Date.now();
+  await speak(b, READ(b.line), token);
+  const left = READ(b.line) / speed() - (Date.now() - started);
+  if (left > 0) await sleep(Math.min(left, 2500));
+  await wait(GAP);
+}
+
 // ---------- playback ----------
 async function prepare(run) {
   state.run = run;
@@ -276,7 +340,9 @@ async function prepare(run) {
   $("#log").innerHTML = "";
   $("#end").hidden = true;
   $("#title").hidden = true;
-  $("#stage").classList.remove("is-night");
+  $("#stage").classList.remove("is-night", "is-flashback");
+  $("#crumbs").innerHTML = "";
+  $("#board").innerHTML = `<p class="empty">Clues get pinned here as Goldilocks finds them.</p>`;
   $("#hud-case").textContent = `Case #${run.caseNumber} · setup ${run.setupId}`;
   clearTransient();
   setCamera(WIDE);
@@ -295,21 +361,24 @@ function stop() {
   state.playing = false;
   window.speechSynthesis?.cancel();
   state.audio?.pause();
-  $("#play").textContent = "▶ Play";
+  $("#play").textContent = "Replay";
 }
 
 async function play(id, run) {
   stop();
   const token = ++state.token;
   state.playing = true;
-  $("#play").textContent = "⏹ Stop";
+  $("#play").textContent = "Stop";
   await prepare(run ?? (await fetchRun(id)));
   await playLoaded(token);
 }
 
 function shotForBeat(b) {
-  if (b.kind === "title" || b.scene === "cast" || b.scene === "reveal") return WIDE;
+  if (b.kind === "title" || b.scene === "cast") return WIDE;
   if (b.scene === "midnight") return b.kind === "plan" ? shotFor("bedroom") : b.kind === "narrate" || b.kind === "sneak" ? shotFor("kitchen") : null;
+  if (b.kind === "flashback") return shotFor(b.place === "bedroom" ? "bedroom" : "kitchen");
+  if (b.scene === "reveal") return WIDE;
+  if (b.kind === "evidence") return closeUp(b.focus);
   if (b.scene === "morning") return shotFor("kitchen");
   return shotFor("parlour");
 }
@@ -357,28 +426,24 @@ function moveBeat(b) {
 }
 
 async function showGroup(group, token) {
-  clearTransient();
+  // The opening's skills and memories go straight to the case file, not the screen.
   for (const b of group) logEntry(b);
-  if (group[0].kind === "narrate") {
-    caption(`Skills equipped: ${group.map((b) => b.line.replace(/^.* equips /, "").replace(/\.$/, "")).join(" · ")}`);
-    await wait(2000);
-  } else {
-    caption(`<div class="memories">${group.map((b) => `<div><b>${escapeHtml(state.cast[b.actor]?.name ?? "")}</b> ${escapeHtml(b.line)}</div>`).join("")}</div>`, true);
-    await wait(1800 + group.length * 450);
-  }
+  const book = group.find((b) => b.kind === "memory" && b.actor === "goldilocks" && b.line.startsWith("Opens"));
+  if (book) pin({ tag: "Casebook", text: book.line.replace(/^Opens her casebook\. /, ""), kind: "note" });
   void token;
 }
 
 async function showBeat(b, token) {
   clearTransient();
   const shot = shotForBeat(b);
-  if (shot && setCamera(shot)) await wait(900);
+  if (shot && setCamera(shot)) await wait(1100);
   if (b.pieSlices !== undefined) drawPie(b.pieSlices);
   if (b.suspicion) setSuspicion(b.suspicion);
   if (b.mood && b.actor !== "narrator") setMood(b.actor, b.mood);
 
   switch (b.kind) {
     case "title": {
+      if (b.scene === "reveal" && b.line !== "What Really Happened") $("#stage").classList.remove("is-flashback");
       const card = $("#title");
       const opening = b.scene === "cast";
       const sub = opening ? `Case #${state.run.caseNumber} · setup ${state.run.setupId} · a film the characters write themselves` : SCENES[b.scene];
@@ -390,7 +455,7 @@ async function showBeat(b, token) {
         document.querySelectorAll(".actor").forEach((a) => a.classList.remove("asleep"));
       }
       if (b.scene === "reveal") unsealLog();
-      await wait(opening ? 2200 : 1400);
+      await wait(opening ? 3200 : 2200);
       card.hidden = true;
       if (b.scene === "reveal") logEntry({ ...b, kind: "reveal", line: `Ending: ${b.line}` });
       return;
@@ -400,12 +465,47 @@ async function showBeat(b, token) {
       logEntry(b);
       if (b.line.startsWith("Same setup")) return;
       caption(b.line);
-      if (b.actor !== "narrator") {
-        animate(b.actor, b.kind === "reveal" ? "jump" : "nod");
-        await wait(b.kind === "reveal" ? 1500 : 1200);
-        return;
-      }
-      await speak(b, Math.max(1800, words(b.line) * 300), token);
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "evidence": {
+      $("#stage").classList.add("clue-focus");
+      if (b.focus?.kind === "trail") crumbTrail(b.focus.who);
+      stamp(`Exhibit ${b.exhibit ?? ""}`, "exhibit");
+      caption(b.line);
+      logEntry(b);
+      pin({ tag: `Exhibit ${b.exhibit}`, text: b.line });
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "verdict": {
+      const label = { too_hot: "Too hot", too_cold: "Too cold", just_right: "Just right" }[b.verdict] ?? "";
+      showBubble("goldilocks", b.line);
+      stamp(label, b.verdict);
+      logEntry(b);
+      pin({ tag: `${state.cast[b.target]?.name.split(" ")[0]}'s answer`, text: label, kind: b.verdict, color: state.cast[b.target]?.color });
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "secret": {
+      animate(b.actor, "point", 1200);
+      setTimeout(() => animate(b.target, "shake", 900), 500);
+      stamp("Secret out!", "secret");
+      showBubble(b.actor, b.line.replace(/^.*?blurts it out: /, ""));
+      logEntry(b);
+      pin({ tag: "Red herring?", text: b.line.replace(/^.*?blurts it out: /, ""), kind: "secret" });
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "flashback": {
+      $("#stage").classList.add("is-flashback");
+      document.getElementById(`actor-${b.actor}`)?.classList.remove("asleep", "offstage");
+      placeActor(b.actor, b.place ?? "kitchen");
+      await wait(900);
+      caption(b.line);
+      logEntry(b);
+      animate(b.actor, "sneaky", 2000);
+      await wait(READ(b.line));
       return;
     }
     case "plan":
@@ -413,7 +513,7 @@ async function showBeat(b, token) {
       showBubble(b.actor, b.line, true);
       logEntry(b);
       if (b.kind === "sneak") animate(b.actor, "sneaky", 2000);
-      await wait(b.kind === "plan" ? 1250 : Math.max(1800, words(b.line) * 240));
+      await wait(b.kind === "plan" ? 2200 : READ(b.line));
       return;
     }
     case "react": {
@@ -421,7 +521,7 @@ async function showBeat(b, token) {
       animate(b.actor, "jump");
       showBubble(b.actor, b.line);
       logEntry(b);
-      await speak(b, 1300, token);
+      await speakAtLeast(b, token);
       return;
     }
     case "say":
@@ -436,7 +536,7 @@ async function showBeat(b, token) {
       if (b.kind === "respond") animate(b.actor, b.isLie ? "shake" : "jump");
       showBubble(b.actor, b.line);
       logEntry(b);
-      await speak(b, Math.max(1800, words(b.line) * 330), token);
+      await speakAtLeast(b, token);
       return;
     }
     case "whisper": {
@@ -447,7 +547,8 @@ async function showBeat(b, token) {
       $("#wires").innerHTML = `<path class="wire" d="M${a.x} ${(a.y - 7) * 0.5625} Q${(a.x + t.x) / 2} ${Math.min(a.y, t.y) * 0.5625 - 8} ${t.x} ${(t.y - 7) * 0.5625}"/>`;
       caption(`${state.cast[b.actor].name} sends ${state.cast[b.target].name} a private message (BAND)…`);
       logEntry(b);
-      await wait(1600);
+      pin({ tag: "Whisper", text: `${state.cast[b.actor].name.split(" ")[0]} → ${state.cast[b.target].name.split(" ")[0]} (sealed)`, kind: "note" });
+      await wait(2200);
       return;
     }
     case "research": {
@@ -459,7 +560,8 @@ async function showBeat(b, token) {
       card.className = "research fade-in";
       card.hidden = false;
       logEntry(b);
-      await wait(2600);
+      pin({ tag: "Research", text: b.line.slice(0, 120) });
+      await wait(READ(b.line));
       return;
     }
   }
@@ -530,7 +632,7 @@ async function newRun() {
           history.replaceState(null, "", `?case=${e.run.id}`);
           started = true;
           state.playing = true;
-          $("#play").textContent = "⏹ Stop";
+          $("#play").textContent = "Stop";
           player = playLoaded(token);
         } else if (e.type === "beat") state.run.beats.push(e.beat);
         else if (e.type === "patch") {
@@ -551,7 +653,7 @@ async function newRun() {
   } finally {
     state.generating = false;
     btn.disabled = false;
-    btn.textContent = "✨ Make a new film";
+    btn.textContent = "Open a new case";
   }
 }
 
@@ -607,7 +709,7 @@ async function recordFilm() {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   btn.classList.remove("recording");
-  btn.textContent = "⏺ Record & download";
+  btn.textContent = "Record & download";
 }
 
 init();

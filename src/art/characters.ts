@@ -78,14 +78,12 @@ export const promptFor = (c: CharacterArt) => `${c.look} ${ART_STYLE}`;
 // The film's set: a cutaway of the Three Bears' log cabin, rooms laid out 2x2 so the
 // stage can place characters in each quadrant.
 export const CABIN_PROMPT = [
-  "Cutaway dollhouse cross-section view of a cozy log cabin in an autumn forest at night, seen straight from the front like a stage set,",
-  "four rooms arranged in a two by two grid separated by thick log walls and a wooden floor:",
-  "top-left a rustic kitchen with a pumpkin pie cooling on a wooden counter;",
-  "top-right a dining room with a wooden table set with three porridge bowls, one big, one medium, one small;",
-  "bottom-left a parlour with a glowing stone fireplace and three armchairs, one big, one medium, one small;",
-  "bottom-right a bedroom with three beds with patchwork quilts, one big, one medium, one small.",
-  "Each room has open empty floor space in the lower half for characters to stand.",
-  "Whimsical, unique 3D storybook render, every surface sculpted from glowing translucent glass-fiber strands and painterly brushstrokes,",
-  "warm amber firelight and lantern glow inside, iridescent rainbow sheen, soft neon bloom, deep ultramarine blue night outside the cabin.",
-  "No characters, no people, no animals, no text.",
+  "Cutaway dollhouse cross-section of a cozy log cabin in a night forest, seen straight from the front like a theatre set,",
+  "four rooms in a two by two grid separated by thick log walls and floors:",
+  "top-left a kitchen with a pumpkin pie on a wooden counter; top-right a dining room with a table and three porridge bowls, big, medium and small;",
+  "bottom-left a parlour with a stone fireplace and three armchairs, big, medium and small; bottom-right a bedroom with three beds, big, medium and small.",
+  "Empty floor space in the lower half of every room. No characters, no people, no animals, no text.",
+  "Art style exactly matching whimsical 3D characters made of thousands of translucent glowing glass-fiber strands and scratchy painterly brushstrokes:",
+  "every log, chair, bed, bowl and the pie is sculpted from glowing translucent glass threads with iridescent holographic rainbow sheen and soft neon bloom,",
+  "deep ultramarine and violet blue palette with warm molten-amber firelight glowing through the glass, dark blue night forest outside, stylized, dreamy, not photorealistic.",
 ].join(" ");

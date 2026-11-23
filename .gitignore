@@ -17,4 +17,4 @@ logs/runs
 logs/*.log
 __pycache__/
 *.py[cod]
-logs/queries
+logs/queriesweb/assets/scenes/v1/

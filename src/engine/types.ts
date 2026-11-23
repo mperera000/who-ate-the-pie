@@ -50,6 +50,10 @@ export type BeatKind =
   | "research" // Telem / Glasser lookup
   | "accuse"
   | "react" // a bystander's reaction (mood + mutter)
+  | "evidence" // a clue, shown as a close-up exhibit
+  | "verdict" // Goldilocks's "just right" test on an answer
+  | "secret" // a bear blurts out another bear's secret
+  | "flashback" // lights-on replay of what a bear really did
   | "respond"
   | "reveal";
 
@@ -75,6 +79,10 @@ export interface Beat {
   sponsors: SponsorUse[];
   /** URL of the voice clip (Runware), patched in once it's ready */
   audio?: string;
+  /** what a close-up shows: the pie, a bear's chair, or a crumb trail to a bear */
+  focus?: { kind: "pie" | "chair" | "trail"; who?: SuspectId };
+  exhibit?: string;
+  verdict?: "too_hot" | "too_cold" | "just_right";
   /** true when this line will never get a voice clip (caption only) */
   silent?: boolean;
 }
