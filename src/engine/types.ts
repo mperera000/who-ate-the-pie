@@ -54,6 +54,9 @@ export type BeatKind =
   | "verdict" // Goldilocks's "just right" test on an answer
   | "secret" // a bear blurts out another bear's secret
   | "flashback" // lights-on replay of what a bear really did
+  | "weather" // tonight's live weather at the cabin
+  | "radio" // a real headline on the cabin radio
+  | "wildcard" // a random twist
   | "respond"
   | "reveal";
 
@@ -132,4 +135,5 @@ export interface Run {
   truth?: Truth;
   ending?: Ending;
   lastYear: Partial<Record<CharacterId, string>>;
+  weather?: { forest: string; description: string; sky: string; live: boolean };
 }

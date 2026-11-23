@@ -341,6 +341,7 @@ async function prepare(run) {
   $("#end").hidden = true;
   $("#title").hidden = true;
   $("#stage").classList.remove("is-night", "is-flashback");
+  delete $("#stage").dataset.sky;
   $("#crumbs").innerHTML = "";
   $("#board").innerHTML = `<p class="empty">Clues get pinned here as Goldilocks finds them.</p>`;
   $("#hud-case").textContent = `Case #${run.caseNumber} · setup ${run.setupId}`;
@@ -379,6 +380,7 @@ function shotForBeat(b) {
   if (b.kind === "flashback") return shotFor(b.place === "bedroom" ? "bedroom" : "kitchen");
   if (b.scene === "reveal") return WIDE;
   if (b.kind === "evidence") return closeUp(b.focus);
+  if (b.kind === "weather" || b.kind === "wildcard") return WIDE;
   if (b.scene === "morning") return shotFor("kitchen");
   return shotFor("parlour");
 }
@@ -465,6 +467,37 @@ async function showBeat(b, token) {
       logEntry(b);
       if (b.line.startsWith("Same setup")) return;
       caption(b.line);
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "weather": {
+      const sky = state.run.weather?.sky ?? "clear";
+      $("#stage").dataset.sky = sky;
+      $("#hud-case").textContent = `Case #${state.run.caseNumber} · ${state.run.weather?.forest ?? ""} · live weather`;
+      stamp(`Live: ${sky}`, "weather");
+      caption(b.line);
+      logEntry(b);
+      pin({ tag: "Live weather", text: `${b.line.replace(/^Live tonight in /, "")}`, kind: "note" });
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "radio": {
+      $("#stage").classList.add("radio-on");
+      stamp("📻 On air", "radio");
+      caption(b.line);
+      logEntry(b);
+      pin({ tag: "Radio · real news", text: b.line.replace(/^On the radio: /, "") });
+      await speakAtLeast(b, token);
+      $("#stage").classList.remove("radio-on");
+      return;
+    }
+    case "wildcard": {
+      stamp("Twist!", "secret");
+      document.querySelectorAll(".actor").forEach((a) => a.classList.add("jump"));
+      setTimeout(() => document.querySelectorAll(".actor").forEach((a) => a.classList.remove("jump")), 700);
+      caption(b.line);
+      logEntry(b);
+      pin({ tag: "Twist", text: b.line, kind: "secret" });
       await speakAtLeast(b, token);
       return;
     }

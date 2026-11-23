@@ -8,6 +8,7 @@ import { lookupFact } from "../sponsors/glasser.js";
 import { voiceLine } from "../sponsors/runware.js";
 import { webSearch } from "../sponsors/telem.js";
 import { casebook } from "../stats.js";
+import { WILDCARDS, liveWeather, weatherRules } from "../world.js";
 import { listCases, saveCase, saveRun } from "../store.js";
 import { Brain } from "./brain.js";
 import { CAST, OPENING, byId, nameOf } from "./cast.js";
@@ -138,7 +139,7 @@ function newRunId() {
 
 export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<Run> {
   const brain = new Brain();
-  const pastCases = await listCases();
+  const [pastCases, weather] = await Promise.all([listCases(), liveWeather()]);
   const book = casebook(pastCases);
   const run: Run = {
     id: newRunId(),
@@ -151,6 +152,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     cast: CAST,
     beats: [],
     lastYear: pastCases[0]?.lastYear ?? {},
+    weather: { forest: weather.forest, description: weather.description, sky: weather.sky, live: weather.live },
   };
   const { beats: _beats, ...header } = run;
   onEvent?.({ type: "start", run: header });
@@ -161,7 +163,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
   const voices: Promise<void>[] = [];
   const voiced = (b: Beat) =>
     Boolean(b.line) &&
-    ["say", "accuse", "respond", "react", "narrate", "reveal", "evidence", "verdict", "secret"].includes(b.kind) &&
+    ["say", "accuse", "respond", "react", "narrate", "reveal", "evidence", "verdict", "secret", "weather", "radio", "wildcard"].includes(b.kind) &&
     b.scene !== "cast" &&
     !(b.kind === "reveal" && b.actor !== "narrator") &&
     !b.line!.startsWith("Same setup") &&
@@ -221,6 +223,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
         `Skill, ${c.skill}: ${skills[id]}`,
         run.lastYear[id] ? `Memory from last Thanksgiving: ${run.lastYear[id]}` : "",
         id === "goldilocks" ? book.prompt : "",
+        weatherRules(weather),
         "Nothing is scripted: you decide what you do. Lying is allowed when it serves your goal, but always fill in is_lie honestly. This is a 90-second film, so every spoken line must be short, punchy, funny and family-friendly.",
       ]
         .filter(Boolean)
@@ -237,6 +240,13 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     for (const s of SUSPECTS) move(s, "bedroom", "midnight");
     move("goldilocks", "outside", "midnight");
     beat({ scene: "midnight", kind: "narrate", actor: "narrator", line: "Thanksgiving Eve. Mama's pumpkin pie cools in the kitchen. The bears go up to bed.", pieSlices: TOTAL_SLICES });
+    beat({
+      scene: "midnight",
+      kind: "weather",
+      actor: "narrator",
+      line: `Live tonight in ${weather.forest}: ${weather.description}.`,
+      reason: weatherRules(weather),
+    });
 
     // Each bear decides, alone in bed, whether and when to sneak down.
     const plans = await Promise.all(
@@ -267,7 +277,8 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     let lingering: SuspectId | null = null;
     for (const p of order) {
       const id = p.id;
-      if (lingering) memory[id].push(`When you crept downstairs at ${p.when}, you saw ${nameOf(lingering)} tiptoeing out of the kitchen.`);
+      const dark = weather.effects.fog || (weather.effects.powerCut && (p.when === "2am" || p.when === "3am"));
+      if (lingering && !dark) memory[id].push(`When you crept downstairs at ${p.when}, you saw ${nameOf(lingering)} tiptoeing out of the kitchen.`);
       const onCounter = truth.hiddenBy === null && truth.slicesLeft > 0;
       const situation = onCounter
         ? `It's ${p.when}. You've crept into the kitchen. The pie is on the counter with ${truth.slicesLeft} of ${TOTAL_SLICES} slices left. Nobody is watching.`
@@ -312,13 +323,21 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
         sponsors: [use],
       });
       move(id, "bedroom", "midnight");
-      lingering = d.clean_up ? id : null;
+      lingering = d.clean_up || weather.effects.moonlight ? id : null;
     }
     if (order.length === 0) beat({ scene: "midnight", kind: "narrate", actor: "narrator", line: "Not a single bear stirs all night. And yet…" });
 
     // ---- Scene 2: The morning after ----
     truth.culprits = SUSPECTS.filter((s) => truth.eaten[s] > 0 || truth.hiddenBy === s);
     beat({ scene: "morning", kind: "title", actor: "narrator", line: "The Morning After" });
+    {
+      const { value: r, use: telem } = await webSearch("funny animal news this week");
+      const pickTitle = r.sources.map((x) => x.title.replace(/^watch:?\s+/i, "")).find((t) => t.split(" ").length >= 5 && !/^(top|best)\s+\d/i.test(t) && !/\b(funniest|compilation|week)\b/i.test(t));
+      const headline = (telem.live && pickTitle ? pickTitle : "Local moose wins pie-eating contest, refuses to share his recipe").replace(/\s+[|\-–—]\s+[^|\-–—]+$/, "").slice(0, 110);
+      beat({ scene: "morning", kind: "radio", actor: "narrator", line: `On the radio: "${headline}."`, sources: r.sources.slice(0, 1), sponsors: [{ ...telem, what: "today's headline" }] });
+      for (const c of CAST) memory[c.id].push(`This morning the cabin radio said: "${headline}". You may use it as an alibi, an excuse or a distraction.`);
+      spoken.push(`Radio: ${headline}`);
+    }
     for (const s of SUSPECTS) move(s, "kitchen", "morning");
     move("goldilocks", "kitchen", "morning");
 
@@ -329,6 +348,10 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     else clues.push({ line: `Only ${truth.slicesLeft} of ${TOTAL_SLICES} slices remain.`, focus: { kind: "pie" } });
     for (const v of truth.visits) {
       if (v.choice.startsWith("eat") && !v.cleanedUp) clues.push({ line: `A trail of crumbs leads from the kitchen… to ${nameOf(v.id)}'s chair.`, focus: { kind: "trail", who: v.id } });
+    }
+    if (weather.effects.mud) {
+      const muddy = truth.visits.find((v) => v.choice !== "stayed_in_bed" && !v.cleanedUp);
+      if (muddy) clues.splice(1, 0, { line: `Muddy paw prints by the counter. ${({ papa: "Big", mama: "Medium", baby: "Small" } as const)[muddy.id]}-sized.`, focus: { kind: "pie" } });
     }
     for (const f of truth.framed) clues.push({ line: `Crumbs all over ${nameOf(f.target)}'s chair.`, focus: { kind: "chair", who: f.target } });
     if (clues.length === 1) clues.push({ line: "Not a single other crumb anywhere. A professional job.", focus: { kind: "pie" } });
@@ -344,7 +367,14 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     beat({ scene: "interrogation", kind: "title", actor: "narrator", line: "The Interrogation" });
     for (const c of CAST) move(c.id, "parlour", "interrogation");
     let suspicion: Record<SuspectId, number> = { papa: 33, mama: 33, baby: 33 };
+    const wildcardRound = Math.min(2, config.rounds);
     for (let round = 1; round <= config.rounds; round++) {
+      if (round === wildcardRound) {
+        const twist = WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)];
+        beat({ scene: "interrogation", kind: "wildcard", actor: "narrator", line: twist });
+        for (const c of CAST) memory[c.id].push(`Surprise just now: ${twist}`);
+        spoken.push(`(Twist: ${twist})`);
+      }
       const { value: q, use } = await brain.decide(
         `Goldilocks: round ${round}`,
         detectiveSchema,
