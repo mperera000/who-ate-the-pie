@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+node_modules
+runs
+web/assets/models/raw
+web/assets/models/v2-glow
+web/assets/characters/v1-cartoon
+web/assets/characters/v2-glow

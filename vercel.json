@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "web",
+  "buildCommand": "",
+  "installCommand": "npm install",
+  "functions": {
+    "api/generate.ts": {
+      "maxDuration": 300
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/decisions.csv",
+      "destination": "/api/decisions"
+    }
+  ]
+}

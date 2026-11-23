@@ -1,0 +1,9 @@
+# Every decision from every film, ingested from the app's public feed.
+name: raw.decisions
+type: ingestr
+connection: duckdb-default
+
+parameters:
+  source_connection: http
+  source_table: "data"
+  destination: duckdb

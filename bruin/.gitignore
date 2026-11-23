@@ -1,0 +1,5 @@
+films.duckdb
+films.duckdb.wal
+logs/
+
+.bruin.yml

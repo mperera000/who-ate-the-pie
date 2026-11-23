@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cast Sheet</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+    <style>
+      :root { --page: #17110e; --panel: #221915; --line: #3d2f27; --ink: #f6ecdd; --muted: #b3a08a; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--page); color: var(--ink); font-family: Inter, system-ui, sans-serif; padding: 24px; }
+      h1 { font-family: Fraunces, Georgia, serif; margin: 0 0 4px; }
+      p.sub { color: var(--muted); margin: 0 0 24px; }
+      section { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--c); border-radius: 16px; padding: 16px; margin-bottom: 18px; }
+      h2 { font-family: Fraunces, Georgia, serif; margin: 0 0 6px; }
+      details { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+      .grid { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+      figure { margin: 0; flex: 0 0 auto; text-align: center; }
+      figure img, model-viewer { width: 220px; height: 330px; border-radius: 12px; background: #0b1a7a; object-fit: contain; display: block; }
+      figure.chosen img { outline: 4px solid var(--c); }
+      figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; }
+      code { background: #0004; padding: 2px 6px; border-radius: 6px; color: var(--ink); }
+      .empty { color: var(--muted); }
+      @media (max-width: 640px) { body { padding: 16px; } figure img, model-viewer { width: 160px; height: 240px; } }
+    </style>
+  </head>
+  <body>
+    <h1>Cast sheet</h1>
+    <p class="sub">Goldilocks and the Three Bears. Pick one image per character, then turn it into a 3D model.</p>
+    <div id="cast"><p class="empty">No images yet. Run <code>npm run art -- images</code>.</p></div>
+    <script type="module">
+      const res = await fetch("/assets/characters/manifest.json", { cache: "no-store" });
+      if (res.ok) {
+        const manifest = await res.json();
+        document.getElementById("cast").innerHTML = Object.entries(manifest)
+          .map(([id, c]) => `<section style="--c:${c.color}">
+              <h2>${c.name}</h2>
+              <details><summary>Prompt</summary>${c.prompt}</details>
+              <div class="grid">
+                ${c.model ? `<figure><model-viewer src="/assets/${c.model}" camera-controls auto-rotate shadow-intensity="1" alt="${c.name} 3D model"></model-viewer><figcaption>3D model</figcaption></figure>` : ""}
+                ${c.images.map((f) => `<figure class="${c.chosen === f ? "chosen" : ""}"><img src="/assets/characters/${f}" alt="${c.name} option ${f}" loading="lazy"/><figcaption><code>npm run art -- 3d ${id} ${f}</code></figcaption></figure>`).join("")}
+              </div>
+            </section>`)
+          .join("");
+      }
+    </script>
+  </body>
+</html>
