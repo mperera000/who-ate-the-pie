@@ -3,7 +3,7 @@
 const $ = (sel) => document.querySelector(sel);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SUSPECTS = ["papa", "mama", "baby"];
-const SPONSOR_ORDER = ["Claude", "Bruin", "BAND", "Runware", "Telem", "Finch"];
+const SPONSOR_ORDER = ["Claude", "Bruin", "BAND", "Runware", "Telem"];
 const SCENES = { cast: "Opening", midnight: "Scene 1", morning: "Scene 2", interrogation: "Scene 3", accusation: "Scene 4", reveal: "Finale" };
 const SPOKEN = ["say", "accuse", "respond", "react", "narrate", "reveal"];
 
@@ -271,6 +271,7 @@ function logEntry(beat) {
     ${beat.isLie ? `<span class="flag hidden-flag" hidden>[LIE]</span>` : ""}
     ${sealedLine || sealedWhy ? `<span class="seal">[SEALED UNTIL THE REVEAL]</span>` : ""}
     <div class="chips">${(beat.sponsors ?? [])
+      .filter((u) => u.sponsor !== "Finch")
       .map((u) => `<span class="chip ${u.live ? "live" : ""}">${u.sponsor} · ${escapeHtml(u.what)}${u.ms ? ` · ${(u.ms / 1000).toFixed(1)}s` : ""}${u.costUsd ? ` · $${u.costUsd.toFixed(3)}` : ""}</span>`)
       .join("")}</div>`;
   $("#log").prepend(li);
