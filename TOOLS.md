@@ -53,10 +53,6 @@ Each film picks a random real forest (Yosemite, the Black Forest, Hokkaido and o
 - **Blob storage:** finished films, case summaries and the decision feed, so the casebook, memories and endings grid build up across every viewer's films (`src/store.ts`).
 - A daily cap (40 new films) keeps the public link from running up API costs.
 
-## AdaL: poster and demo video
-
-Used outside the code, for the submission's poster and the edit of the demo video.
-
 ## Finch
 
 Not in use yet. Finch's marketplace has skills that would fit (Novel Characters for a cast bible, Noiz Sound FX and Text to Music for sound), but they aren't wired in yet, so Finch isn't credited in the film.

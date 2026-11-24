@@ -51,7 +51,6 @@ Full details, with where each one lives in the code: [TOOLS.md](TOOLS.md).
 | **Runware** | Character art (FLUX.2), background removal, 3D models (Tripo 3D), the cabin set, and every voice line (xAI TTS) |
 | **Telem AI** | Goldilocks's live web research mid-interrogation, with sources |
 | **Claude** | The four agents' brains: `claude-opus-5-5` with structured JSON decisions |
-| **AdaL** | Poster and demo-video edit |
 
 ## Run it locally
 
