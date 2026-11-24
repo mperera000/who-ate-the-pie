@@ -30,6 +30,13 @@ import {
 } from "./types.js";
 
 const TOTAL_SLICES = 8;
+interface Clue {
+  line: string;
+  focus: NonNullable<Beat["focus"]>;
+  pointsTo: SuspectId | null;
+  honest: boolean;
+  why: string;
+}
 const others = (id: SuspectId) => SUSPECTS.filter((s) => s !== id) as SuspectId[];
 const nobodyOr = (ids: SuspectId[]) => z.enum(["nobody", ...ids] as [string, ...string[]]);
 const mood = z.enum(MOODS).describe("The emoji that shows how you feel right now");
@@ -265,7 +272,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
       beat({ scene: "midnight", kind: "plan", actor: p.id, line: p.thought, reason: p.when === "stay_in_bed" ? "Stays in bed." : `Plans to sneak down at ${p.when}.`, sealed: true, sponsors: [p.use] });
     }
 
-    const truth: Truth = { visits: [], eaten: { papa: 0, mama: 0, baby: 0 }, hiddenBy: null, framed: [], culprits: [], slicesLeft: TOTAL_SLICES };
+    const truth: Truth = { visits: [], eaten: { papa: 0, mama: 0, baby: 0 }, hiddenBy: null, framed: [], culprits: [], slicesLeft: TOTAL_SLICES, clues: [], secretsOut: [] };
     const order = plans
       .filter((p) => p.when !== "stay_in_bed")
       .sort((a, b) => SNEAK_TIMES.indexOf(a.when) - SNEAK_TIMES.indexOf(b.when) || SUSPECTS.indexOf(a.id) - SUSPECTS.indexOf(b.id));
@@ -342,22 +349,35 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     move("goldilocks", "kitchen", "morning");
 
     // Every clue below follows from a choice a bear made at midnight.
-    const clues: { line: string; focus: NonNullable<Beat["focus"]> }[] = [];
-    if (truth.culprits.length === 0) clues.push({ line: "The pie is GONE. Only an empty tin, licked suspiciously clean.", focus: { kind: "pie" } });
-    else if (truth.hiddenBy) clues.push({ line: "The whole pie has vanished. Just a ring where the tin sat.", focus: { kind: "pie" } });
-    else clues.push({ line: `Only ${truth.slicesLeft} of ${TOTAL_SLICES} slices remain.`, focus: { kind: "pie" } });
-    for (const v of truth.visits) {
-      if (v.choice.startsWith("eat") && !v.cleanedUp) clues.push({ line: `A trail of crumbs leads from the kitchen… to ${nameOf(v.id)}'s chair.`, focus: { kind: "trail", who: v.id } });
-    }
+    // Layered clues. Each records who it really points to and whether it's honest,
+    // so the viewer's debrief can explain true leads and red herrings.
+    const FUR: Record<SuspectId, string> = { papa: "dark amber", mama: "honey-gold", baby: "pale peach" };
+    const clues: Clue[] = [];
+    if (truth.culprits.length === 0) clues.push({ line: "The pie is GONE. Only an empty tin, licked suspiciously clean.", focus: { kind: "pie" }, pointsTo: null, honest: true, why: "Nobody in the family touched it." });
+    else if (truth.hiddenBy) clues.push({ line: "The whole pie has vanished. Just a ring where the tin sat.", focus: { kind: "pie" }, pointsTo: null, honest: true, why: "Someone hid it rather than ate it." });
+    else clues.push({ line: `Only ${truth.slicesLeft} of ${TOTAL_SLICES} slices remain.`, focus: { kind: "pie" }, pointsTo: null, honest: true, why: "How much was taken, not who took it." });
+    const sloppy = truth.visits.filter((v) => v.choice !== "stayed_in_bed" && v.choice !== "leave_it_alone" && !v.cleanedUp);
+    sloppy.forEach((v, k) => {
+      if (k % 2 === 0) clues.push({ line: `A tuft of ${FUR[v.id]} fur is stuck to the pie tin.`, focus: { kind: "pie" }, pointsTo: v.id, honest: true, why: `${FUR[v.id][0].toUpperCase()}${FUR[v.id].slice(1)} is ${nameOf(v.id)}'s fur color.` });
+      else clues.push({ line: `A trail of crumbs leads from the kitchen… to ${nameOf(v.id)}'s chair.`, focus: { kind: "trail", who: v.id }, pointsTo: v.id, honest: true, why: `${nameOf(v.id)} ate without cleaning up.` });
+    });
+    const greedy = truth.visits.find((v) => v.choice === "eat_two_slices");
+    if (greedy) clues.push({ line: "Two slices were taken in one go. A big appetite… or a small bear with big ideas?", focus: { kind: "pie" }, pointsTo: greedy.id, honest: true, why: `${nameOf(greedy.id)} took two slices at once.` });
+    const clockVisit = truth.visits.find((v) => v.choice !== "stayed_in_bed" && !v.cleanedUp);
+    if (clockVisit) clues.push({ line: `The kitchen clock was knocked crooked. It stopped at ${clockVisit.time === "midnight" ? "12:00" : clockVisit.time.replace("am", ":00")}.`, focus: { kind: "pie" }, pointsTo: clockVisit.id, honest: true, why: `${nameOf(clockVisit.id)} was in the kitchen at ${clockVisit.time}; check who has no alibi then.` });
     if (weather.effects.mud) {
       const muddy = truth.visits.find((v) => v.choice !== "stayed_in_bed" && !v.cleanedUp);
-      if (muddy) clues.splice(1, 0, { line: `Muddy paw prints by the counter. ${({ papa: "Big", mama: "Medium", baby: "Small" } as const)[muddy.id]}-sized.`, focus: { kind: "pie" } });
+      if (muddy) clues.push({ line: `Muddy paw prints by the counter. ${({ papa: "Big", mama: "Medium", baby: "Small" } as const)[muddy.id]}-sized.`, focus: { kind: "pie" }, pointsTo: muddy.id, honest: true, why: `Rain made ${nameOf(muddy.id)}'s paws muddy.` });
     }
-    for (const f of truth.framed) clues.push({ line: `Crumbs all over ${nameOf(f.target)}'s chair.`, focus: { kind: "chair", who: f.target } });
-    if (clues.length === 1) clues.push({ line: "Not a single other crumb anywhere. A professional job.", focus: { kind: "pie" } });
-    clues.splice(2);
-    const evidence = clues.map((c) => c.line);
-    clues.forEach((c, k) => {
+    for (const f of truth.framed) clues.push({ line: `Crumbs smeared all over ${nameOf(f.target)}'s chair.`, focus: { kind: "chair", who: f.target }, pointsTo: f.target, honest: false, why: `Planted by ${nameOf(f.by)} to frame ${nameOf(f.target)}.` });
+    if (clues.length === 1) clues.push({ line: "Not a single other crumb anywhere. A professional job.", focus: { kind: "pie" }, pointsTo: null, honest: true, why: "Whoever did it cleaned up." });
+    // Keep the pie clue, then up to two more, always including a red herring when there is one.
+    const herring = clues.find((c) => !c.honest);
+    const leads = clues.slice(1).filter((c) => c.honest);
+    const chosen = [clues[0], ...leads.slice(0, herring ? 1 : 2), ...(herring ? [herring] : [])].slice(0, 3);
+    truth.clues = chosen.map((c, k) => ({ exhibit: "ABC"[k], line: c.line, pointsTo: c.pointsTo, honest: c.honest, why: c.why }));
+    const evidence = chosen.map((c) => c.line);
+    chosen.forEach((c, k) => {
       beat({ scene: "morning", kind: "evidence", actor: "narrator", line: c.line, focus: c.focus, exhibit: "ABC"[k], pieSlices: truth.hiddenBy || truth.culprits.length === 0 ? 0 : truth.slicesLeft });
     });
     spoken.push(`Narrator: ${evidence.join(" ")}`);
@@ -415,6 +435,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
 
       if (a.blurt_secret !== "nobody") {
         const exposed = a.blurt_secret as SuspectId;
+        (truth.secretsOut ??= []).push(exposed);
         const line = `${nameOf(target)} blurts it out: ${SECRET_SLIP[exposed]}`;
         beat({ scene: "interrogation", kind: "secret", actor: target, target: exposed, line, reason: "Deflecting suspicion onto someone else." });
         spoken.push(`${nameOf(target)} (blurting): ${SECRET_SLIP[exposed]}`);
@@ -439,7 +460,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
         const { use: band } = await whisper(roomId, target, to, a.whisper);
         if (roomUse.live && !run.beats.some((b) => b.sponsors.some((u) => u.what.startsWith("case room")))) band.what += ` · ${roomUse.what}`;
         memory[to].push(`${nameOf(target)} privately whispered to you: "${a.whisper}"`);
-        beat({ scene: "interrogation", kind: "whisper", actor: target, target: to, line: a.whisper, sealed: true, sponsors: [band] });
+        beat({ scene: "interrogation", kind: "whisper", actor: target, target: to, line: a.whisper, sponsors: [band] });
       } else if (a.move_to !== "stay") {
         move(target, a.move_to as Place, "interrogation");
         spoken.push(`(${nameOf(target)} walks off to the ${a.move_to}.)`);

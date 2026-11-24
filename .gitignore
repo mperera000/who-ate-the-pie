@@ -18,3 +18,5 @@ logs/*.log
 __pycache__/
 *.py[cod]
 logs/queriesweb/assets/scenes/v1/
+web/assets/scenes/v2/
+web/assets/scenes/v3/

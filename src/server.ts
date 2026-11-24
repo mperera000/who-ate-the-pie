@@ -51,5 +51,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(config.port, () => {
-  console.log(`🕵️‍♀️ Who Ate the Pie? → http://localhost:${config.port}  (${config.mock ? "offline mode: add ANTHROPIC_API_KEY to .env for live agents" : `live: ${config.model}`})`);
+  console.log(`Who Ate the Pie? → http://localhost:${config.port}  (${config.mock ? "offline mode: add ANTHROPIC_API_KEY to .env for live agents" : `live: ${config.model}`})`);
 });

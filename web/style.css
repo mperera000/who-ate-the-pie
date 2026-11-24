@@ -43,7 +43,7 @@ button, select { font: inherit; color: inherit; }
 .pill.offline { color: var(--stamp); border-color: var(--stamp); }
 .sponsors { display: flex; flex-wrap: wrap; gap: 6px; }
 .sponsor.on { color: var(--ink); border-color: var(--ink); }
-.sponsor.on::before { content: "✓ "; color: var(--green); }
+.sponsor.on::before { content: "[x] "; color: var(--green); }
 .sponsor.off { text-decoration: line-through; opacity: 0.6; }
 
 /* ---------- inside the folder ---------- */
@@ -70,11 +70,24 @@ button, select { font: inherit; color: inherit; }
 .actor .body img { width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; display: block; filter: drop-shadow(0 0.2cqw 0.3cqw #000a); user-select: none; }
 .actor.left .body img { transform: scaleX(-1); }
 .actor .name { display: none; }
-.actor .mood { position: absolute; left: 50%; top: -0.6cqw; transform: translate(-50%, -100%); font-size: 2.4cqw; }
-.actor .mood.pop { animation: pop 0.45s ease; }
+/* sweat only appears while a character is nervous or shocked */
+.actor .sweat { position: absolute; top: 6%; left: 12%; right: 12%; height: 30%; pointer-events: none; opacity: 0; transition: opacity 0.4s; }
+.actor .sweat i { position: absolute; width: 7%; aspect-ratio: 0.7; background: linear-gradient(#e8f6ff, #8fd0ff); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; box-shadow: 0 0 0.3cqw #8fd0ff; animation: drip 1.4s ease-in infinite; }
+.actor .sweat i:nth-child(1) { left: 8%; top: 18%; }
+.actor .sweat i:nth-child(2) { right: 10%; top: 8%; animation-delay: 0.5s; }
+.actor .sweat i:nth-child(3) { right: 22%; top: 34%; animation-delay: 0.9s; width: 5%; }
+.actor[data-mood="nervous"] .sweat, .actor[data-mood="shocked"] .sweat { opacity: 1; }
+.actor[data-mood="nervous"] .body { animation: tremble 0.18s linear infinite; }
+.actor[data-mood="smug"] .body, .actor[data-mood="sly"] .body { transform: rotate(-3deg); }
+.actor[data-mood="suspicious"] .body { transform: rotate(3deg) translateX(2%); }
+.actor[data-mood="angry"] .body img { filter: drop-shadow(0 0 0.6cqw #ff5a3c) drop-shadow(0 0.2cqw 0.3cqw #000a); }
+.actor[data-mood="sad"] .body { transform: scaleY(0.95); }
+.actor[data-mood="shocked"] .body { animation: jump 0.5s ease-out 1; }
+@keyframes drip { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(260%); opacity: 0; } }
+@keyframes tremble { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(0.8%); } }
 .actor.asleep { filter: brightness(0.6) saturate(0.8); }
 .actor.asleep .body { animation: snooze 2.6s ease-in-out infinite; }
-.actor.asleep::after { content: "💤"; position: absolute; top: 4%; right: -6%; font-size: 2cqw; animation: float 2s ease-in-out infinite; }
+.actor.asleep::after { content: "z z z"; position: absolute; top: 4%; right: -10%; font-family: var(--type); font-size: 1.4cqw; color: #f7f0de; letter-spacing: 0.1em; animation: float 2s ease-in-out infinite; }
 .actor.walking .body { animation: waddle 0.32s ease-in-out infinite alternate; }
 .actor.speaking .body { animation: talk 0.28s ease-in-out infinite alternate; }
 .actor.accused .body img { filter: drop-shadow(0 0 0.8cqw #ff3b30) drop-shadow(0 0.2cqw 0.3cqw #000a); }
@@ -200,6 +213,32 @@ button, select { font: inherit; color: inherit; }
 @keyframes fall { to { background-position: 0 220px; } }
 @keyframes drift { to { background-position: 200% 0; } }
 @keyframes lightning { 0%, 91%, 95%, 100% { opacity: 0.5; } 92%, 94% { opacity: 0; } }
-.stage.radio-on .hud::after { content: " 📻"; }
+.stage.radio-on .hud::after { content: " · ON AIR"; color: var(--stamp); }
 .stamp.weather { color: #1d3f6e; top: 16%; left: 5%; right: auto; transform: rotate(-4deg); }
 .stamp.radio { color: #6b3fa0; }
+
+.bubble.whisper { font-size: clamp(12px, 1.7cqw, 21px); background: #eef2ff; border-color: #4a5aa8; }
+.bubble.whisper .who { color: #4a5aa8 !important; }
+
+/* ---------- play detective ---------- */
+.guess { position: absolute; inset: 0; z-index: 25; display: grid; place-items: center; text-align: center; background: #f7f0def2; padding: 4%;
+  background-image: repeating-linear-gradient(0deg, transparent 0 calc(2.4cqw - 1px), #9db7d655 calc(2.4cqw - 1px) 2.4cqw); }
+.guess h2 { font-size: clamp(26px, 5.4cqw, 64px); margin: 0.2em 0 0.4em; }
+.guess .suspects { display: flex; gap: 2.4cqw; justify-content: center; align-items: flex-end; }
+.guess .pick { background: #fff; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); padding: 1cqw 1.4cqw 0.6cqw; cursor: pointer; display: grid; justify-items: center; gap: 0.4cqw; font-family: var(--type); font-size: clamp(11px, 1.5cqw, 17px); }
+.guess .pick img { height: clamp(70px, 15cqw, 190px); object-fit: contain; }
+.guess .pick:hover { transform: translate(-2px, -2px) rotate(-1deg); }
+.guess .pick.chosen { background: var(--c); color: #fff; }
+.guess .skip { margin-top: 1.4cqw; background: none; border: 0; text-decoration: underline; cursor: pointer; font-family: var(--mono); color: var(--ink-soft); }
+.guess .hint { color: var(--ink-soft); font-size: clamp(10px, 1.3cqw, 14px); }
+.debrief { margin-top: 16px; background: var(--paper); border: 1px solid var(--manila-dark); padding: 16px 18px; box-shadow: 3px 4px 0 #0002; }
+.debrief h2 { font-size: 22px; border-bottom: 2px solid var(--stamp); padding-bottom: 6px; margin-bottom: 10px; }
+.debrief .verdict { font-family: var(--type); font-size: 18px; margin: 0 0 6px; }
+.debrief .verdict.right { color: var(--green); }
+.debrief .verdict.wrong { color: var(--stamp); }
+.debrief .lesson { font-family: var(--serif); font-size: 15px; line-height: 1.5; margin: 0 0 10px; }
+.debrief .clues { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; }
+.debrief .clues i { color: var(--ink-soft); }
+.debrief .label { font-family: var(--type); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 0 6px; border: 1.5px solid currentColor; }
+.debrief .label.lead { color: var(--green); }
+.debrief .label.herring { color: var(--stamp); }

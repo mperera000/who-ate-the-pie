@@ -78,12 +78,10 @@ export const promptFor = (c: CharacterArt) => `${c.look} ${ART_STYLE}`;
 // The film's set: a cutaway of the Three Bears' log cabin, rooms laid out 2x2 so the
 // stage can place characters in each quadrant.
 export const CABIN_PROMPT = [
-  "Cutaway dollhouse cross-section of a cozy log cabin in a night forest, seen straight from the front like a theatre set,",
-  "four rooms in a two by two grid separated by thick log walls and floors:",
-  "top-left a kitchen with a pumpkin pie on a wooden counter; top-right a dining room with a table and three porridge bowls, big, medium and small;",
-  "bottom-left a parlour with a stone fireplace and three armchairs, big, medium and small; bottom-right a bedroom with three beds, big, medium and small.",
-  "Empty floor space in the lower half of every room. No characters, no people, no animals, no text.",
-  "Art style exactly matching whimsical 3D characters made of thousands of translucent glowing glass-fiber strands and scratchy painterly brushstrokes:",
-  "every log, chair, bed, bowl and the pie is sculpted from glowing translucent glass threads with iridescent holographic rainbow sheen and soft neon bloom,",
-  "deep ultramarine and violet blue palette with warm molten-amber firelight glowing through the glass, dark blue night forest outside, stylized, dreamy, not photorealistic.",
+  "Soft storybook illustration of a cutaway log cabin seen straight from the front like a stage set, four rooms in a two by two grid:",
+  "top-left kitchen with a pumpkin pie on a wooden counter; top-right dining room with a table and three bowls, big, medium and small;",
+  "bottom-left parlour with a stone fireplace and three armchairs, big, medium and small; bottom-right bedroom with three beds, big, medium and small.",
+  "Large empty floor space in the lower half of every room. No characters, no people, no animals, no text.",
+  "Gentle watercolor and gouache style, simple shapes, low detail, very little clutter, soft blurred edges as if slightly out of focus,",
+  "muted desaturated palette of dusty blue, soft cream and warm faded wood, calm even lighting with a soft glow from the fireplace, quiet and understated background art.",
 ].join(" ");

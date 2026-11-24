@@ -32,7 +32,7 @@ export function offlineMidnight(id: SuspectId, others: SuspectId[], pieOnCounter
     clean_up: chance(0.5),
     thought: pick(MIDNIGHT_THOUGHTS[id]),
     reason: choice === "leave_it_alone" ? "Too risky tonight." : "The pie was right there.",
-    mood: pick(["😋", "😏", "😰"] as const),
+    mood: pick(["hungry", "sly", "nervous"] as const),
   };
 }
 
@@ -52,7 +52,7 @@ export function offlineDetective(suspicion: Record<SuspectId, number>) {
     research,
     research_query: research === "web" ? "how long does pumpkin pie take to cool" : research === "data" ? "price of store-bought pumpkin pie" : "",
     reason: "Following the crumbs.",
-    mood: pick(["🧐", "😏", "🙄"] as const),
+    mood: pick(["suspicious", "smug", "calm"] as const),
     suspicion: Object.fromEntries(SUSPECTS.map((s) => [s, Math.min(100, Math.max(0, suspicion[s] + Math.round(Math.random() * 30 - 12)))])) as Record<SuspectId, number>,
   };
 }
@@ -69,7 +69,7 @@ export function offlineAnswer(id: SuspectId, others: SuspectId[], guilty: boolea
     answer: pick(ANSWERS[id]),
     is_lie: guilty ? chance(0.8) : chance(0.2),
     reason: guilty ? "Can't let them know." : "Telling it like it is.",
-    mood: guilty ? pick(["😰", "😇", "😳"] as const) : pick(["😤", "🙄", "😇"] as const),
+    mood: guilty ? pick(["nervous", "innocent", "shocked"] as const) : pick(["angry", "calm", "innocent"] as const),
     move_to: chance(0.3) ? pick(["kitchen", "bedroom"] as const) : ("stay" as const),
     blurt_secret: "nobody" as string,
     whisper_to: whisperTo,
@@ -83,12 +83,12 @@ export function offlineAccuse(suspicion: Record<SuspectId, number>) {
     accused,
     speech: "Elementary! The crumbs, the lies, the guilty fur. You ate the pie!",
     reason: "Highest suspicion after the interviews.",
-    mood: "🧐" as const,
+    mood: "suspicious" as const,
   };
 }
 
 export function offlineReact() {
-  return { mood: pick(["😱", "😳", "😏", "🙄"] as const), mutter: pick(["I knew it.", "No way.", "Called it.", "Oh dear."]) };
+  return { mood: pick(["shocked", "sly", "smug", "calm"] as const), mutter: pick(["I knew it.", "No way.", "Called it.", "Oh dear."]) };
 }
 
 export function offlineResponse(guilty: boolean) {
@@ -97,6 +97,6 @@ export function offlineResponse(guilty: boolean) {
     confess,
     line: confess ? "Fine! It was me! It was a very good pie!" : guilty ? "This is an outrage! I demand a recount!" : "I'm innocent! This girl has lost her deerstalker!",
     reason: confess ? "The guilt was too much." : "Not going down today.",
-    mood: confess ? ("😭" as const) : ("😤" as const),
+    mood: confess ? ("sad" as const) : ("angry" as const),
   };
 }

@@ -21,6 +21,10 @@ Setup `ID` is shown on screen and never changes. **Everything after it is decide
 | Accusation | Goldilocks names a bear; the others react; the accused decides whether to confess |
 | Ending | *Case Closed*, *Caught, Still Denying*, *Framed!*, *Wrong Bear*, or *Old Habits* |
 
+**Play detective (the educational part):** before the reveal, the viewer picks who they think did it. Afterwards a detective debrief marks every exhibit as a *true lead* or a *red herring* and names the reasoning trap that fooled them: planted evidence, a secret that isn't a confession, or a liar who wasn't the thief.
+
+**Live real-world data:** each film pulls the live weather from a random real forest (storms cut the power, full moons expose sneaking bears, rain leaves paw prints) and a real headline for the cabin radio, plus one random twist.
+
 **Memory that changes decisions:** every character remembers last Thanksgiving (wrongly accused bears hold grudges), and Goldilocks keeps a casebook of every past case, who lied and who was guilty, which shapes who she questions next.
 
 ## Hackathon checklist

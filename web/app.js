@@ -9,15 +9,15 @@ const SPOKEN = ["say", "accuse", "respond", "react", "narrate", "reveal"];
 
 // Rooms in the cabin set image (percent of the frame). floor = where feet go.
 const ROOMS = {
-  kitchen: { x: 19, y: 21, w: 29, h: 29, floor: 49 },
-  dining: { x: 50, y: 21, w: 31, h: 29, floor: 49 },
-  parlour: { x: 19, y: 54, w: 29, h: 31, floor: 84.5 },
-  bedroom: { x: 50, y: 54, w: 31, h: 31, floor: 84.5 },
-  outside: { x: 0, y: 55, w: 14, h: 31, floor: 86 },
+  kitchen: { x: 11, y: 12, w: 38, h: 33, floor: 44 },
+  dining: { x: 51, y: 12, w: 37, h: 33, floor: 44 },
+  parlour: { x: 11, y: 49, w: 38, h: 41, floor: 89 },
+  bedroom: { x: 51, y: 49, w: 37, h: 41, floor: 89 },
+  outside: { x: 0, y: 55, w: 10, h: 35, floor: 92 },
 };
-const PIE_AT = { x: 28, y: 40 };
+const PIE_AT = { x: 19, y: 38 };
 // Sprite heights, as % of the frame height (storybook sizes).
-const HEIGHT = { papa: 24, mama: 23, goldilocks: 17, baby: 14 };
+const HEIGHT = { papa: 27, mama: 26, goldilocks: 19, baby: 15 };
 // Reading time: every line stays up long enough to read comfortably.
 const READ = (s) => Math.max(4000, words(s) * 380);
 const GAP = 450;
@@ -191,7 +191,7 @@ function buildActors() {
     .map(
       (c) => `<div class="actor" id="actor-${c.id}" style="--c:${c.color}; --h:${HEIGHT[c.id] ?? 25}%">
         <div class="body"><img src="/assets/cutouts/${c.id}.png" alt="${c.name}" draggable="false"/></div>
-        <span class="mood"></span><span class="name">${c.name}</span></div>`,
+        <span class="sweat" aria-hidden="true"><i></i><i></i><i></i></span><span class="name">${c.name}</span></div>`,
     )
     .join("");
   for (const c of state.run.cast) placeActor(c.id, c.role === "detective" ? "outside" : "bedroom");
@@ -201,13 +201,11 @@ function buildActors() {
   }).join("");
 }
 
+// Mood shows through body language: nervous bears sweat and tremble, smug ones lean back.
 function setMood(id, mood) {
-  const el = document.querySelector(`#actor-${id} .mood`);
+  const el = document.getElementById(`actor-${id}`);
   if (!el || !mood) return;
-  el.textContent = mood;
-  el.classList.remove("pop");
-  void el.offsetWidth;
-  el.classList.add("pop");
+  el.dataset.mood = mood;
 }
 
 function setSuspicion(s) {
@@ -270,8 +268,8 @@ function logEntry(beat) {
     <div class="head"><span><span class="actor-name">${actor ? actor.name : "Narrator"}</span> ${escapeHtml(label)} ${beat.mood ?? ""}</span><span>${SCENES[beat.scene] ?? ""}</span></div>
     ${beat.line ? `<div class="line ${sealedLine ? "sealable" : ""}">${escapeHtml(beat.line)}</div>` : ""}
     ${beat.reason ? `<div class="why ${sealedWhy ? "sealable" : ""}">${escapeHtml(beat.reason)}</div>` : ""}
-    ${beat.isLie ? `<span class="flag hidden-flag" hidden>🤥 That was a lie</span>` : ""}
-    ${sealedLine || sealedWhy ? `<span class="seal">🔒 Sealed until the reveal</span>` : ""}
+    ${beat.isLie ? `<span class="flag hidden-flag" hidden>[LIE]</span>` : ""}
+    ${sealedLine || sealedWhy ? `<span class="seal">[SEALED UNTIL THE REVEAL]</span>` : ""}
     <div class="chips">${(beat.sponsors ?? [])
       .map((u) => `<span class="chip ${u.live ? "live" : ""}">${u.sponsor} · ${escapeHtml(u.what)}${u.ms ? ` · ${(u.ms / 1000).toFixed(1)}s` : ""}${u.costUsd ? ` · $${u.costUsd.toFixed(3)}` : ""}</span>`)
       .join("")}</div>`;
@@ -343,6 +341,9 @@ async function prepare(run) {
   $("#stage").classList.remove("is-night", "is-flashback");
   delete $("#stage").dataset.sky;
   $("#crumbs").innerHTML = "";
+  state.guess = null;
+  $("#debrief").hidden = true;
+  $("#guess").hidden = true;
   $("#board").innerHTML = `<p class="empty">Clues get pinned here as Goldilocks finds them.</p>`;
   $("#hud-case").textContent = `Case #${run.caseNumber} · setup ${run.setupId}`;
   clearTransient();
@@ -445,6 +446,7 @@ async function showBeat(b, token) {
 
   switch (b.kind) {
     case "title": {
+      if (b.scene === "reveal" && b.line === "What Really Happened") await askForGuess(token);
       if (b.scene === "reveal" && b.line !== "What Really Happened") $("#stage").classList.remove("is-flashback");
       const card = $("#title");
       const opening = b.scene === "cast";
@@ -483,7 +485,7 @@ async function showBeat(b, token) {
     }
     case "radio": {
       $("#stage").classList.add("radio-on");
-      stamp("📻 On air", "radio");
+      stamp("On air", "radio");
       caption(b.line);
       logEntry(b);
       pin({ tag: "Radio · real news", text: b.line.replace(/^On the radio: /, "") });
@@ -578,16 +580,17 @@ async function showBeat(b, token) {
       const a = state.pos[b.actor];
       const t = state.pos[b.target];
       $("#wires").innerHTML = `<path class="wire" d="M${a.x} ${(a.y - 7) * 0.5625} Q${(a.x + t.x) / 2} ${Math.min(a.y, t.y) * 0.5625 - 8} ${t.x} ${(t.y - 7) * 0.5625}"/>`;
-      caption(`${state.cast[b.actor].name} sends ${state.cast[b.target].name} a private message (BAND)…`);
+      showBubble(b.actor, `(whispering to ${state.cast[b.target].name}) ${b.line}`, true);
+      $("#bubble").classList.add("whisper");
       logEntry(b);
-      pin({ tag: "Whisper", text: `${state.cast[b.actor].name.split(" ")[0]} → ${state.cast[b.target].name.split(" ")[0]} (sealed)`, kind: "note" });
-      await wait(2200);
+      pin({ tag: `Whisper · ${state.cast[b.actor].name.split(" ")[0]} to ${state.cast[b.target].name.split(" ")[0]}`, text: b.line, kind: "note" });
+      await wait(READ(b.line) + 800);
       return;
     }
     case "research": {
       const card = $("#research");
       const use = b.sponsors[0];
-      card.innerHTML = `<b>${use?.sponsor === "Glasser" ? "🔭 Glasser" : "🛰️ Telem"}</b> · ${escapeHtml(b.reason ?? "")}<br/>${escapeHtml(b.line)}${
+      card.innerHTML = `<b>${use?.sponsor === "Glasser" ? "Glasser" : "Telem · live search"}</b> · ${escapeHtml(b.reason ?? "")}<br/>${escapeHtml(b.line)}${
         b.sources?.length ? `<small>Sources: ${b.sources.slice(0, 2).map((s) => escapeHtml(s.title)).join(" · ")}</small>` : ""
       }`;
       card.className = "research fade-in";
@@ -601,7 +604,7 @@ async function showBeat(b, token) {
 }
 
 // Same setup, different endings: one row per recent case.
-const CHOICE_ICON = { eat_one_slice: "🥧", eat_two_slices: "🥧🥧", hide_the_pie: "🫣", leave_it_alone: "😇", stayed_in_bed: "💤" };
+const CHOICE_ICON = { eat_one_slice: "ate 1", eat_two_slices: "ate 2", hide_the_pie: "hid it", leave_it_alone: "nothing", stayed_in_bed: "slept" };
 function endingsGrid(recent = []) {
   if (recent.length < 2) return "";
   const bears = SUSPECTS.map((id) => state.cast[id]);
@@ -609,13 +612,74 @@ function endingsGrid(recent = []) {
     .map((r) => {
       const v = Object.fromEntries((r.visits ?? []).map((x) => [x.id, x]));
       return `<tr class="${r.id === state.run.id ? "current" : ""}"><td>#${r.caseNumber}</td>${bears
-        .map((c) => `<td>${CHOICE_ICON[v[c.id]?.choice] ?? "?"}${v[c.id]?.frame ? "🫵" : ""}</td>`)
+        .map((c) => `<td>${CHOICE_ICON[v[c.id]?.choice] ?? "?"}${v[c.id]?.frame ? ", framed" : ""}</td>`)
         .join("")}<td>${r.accused ? state.cast[r.accused].name.split(" ")[0] : "-"}</td><td>${escapeHtml(r.ending)}</td></tr>`;
     })
-    .join("")}</tbody></table><p class="stats">🥧 ate · 🫣 hid the pie · 🫵 framed someone · 😇 touched nothing · 💤 stayed in bed</p>`;
+    .join("")}</tbody></table><p class="stats">What each bear really did at midnight, case by case.</p>`;
+}
+
+// ---------- play detective ----------
+async function askForGuess(token) {
+  clearTransient();
+  setCamera(WIDE);
+  const box = $("#guess");
+  const recording = $("#rec") && !$("#rec").hidden;
+  box.innerHTML = `<div class="fade-in"><p class="eyebrow">Your turn, detective</p><h2>Who ate the pie?</h2>
+    <div class="suspects">${SUSPECTS.map((id) => `<button class="pick" data-id="${id}" style="--c:${state.cast[id].color}"><img src="/assets/cutouts/${id}.png" alt=""/><span>${state.cast[id].name}</span></button>`).join("")}</div>
+    <button class="skip">Skip, just show me</button><p class="hint">Look back at the exhibits on the case board. Which clues are real, and which were planted?</p></div>`;
+  box.hidden = false;
+  const choice = await new Promise((resolve) => {
+    box.querySelectorAll(".pick").forEach((b) => (b.onclick = () => resolve(b.dataset.id)));
+    box.querySelector(".skip").onclick = () => resolve(null);
+    setTimeout(() => resolve(null), recording ? 6000 : 45000);
+    const check = setInterval(() => { if (token !== state.token) { clearInterval(check); resolve(null); } }, 300);
+  });
+  state.guess = choice;
+  if (choice) {
+    box.querySelector(`.pick[data-id="${choice}"]`)?.classList.add("chosen");
+    await sleep(700);
+  }
+  box.hidden = true;
+}
+
+// After the reveal: what each clue really meant, and the reasoning trap (if any) that fooled you.
+function renderDebrief() {
+  const run = state.run;
+  const t = run.truth;
+  if (!t) return;
+  const name = (id) => state.cast[id]?.name ?? id;
+  const culprits = t.culprits ?? [];
+  const g = state.guess;
+  const accused = run.ending?.accused;
+  const liars = new Set(run.beats.filter((b) => b.isLie && SUSPECTS.includes(b.actor)).map((b) => b.actor));
+  let verdict, lesson;
+  if (!g) {
+    verdict = "You didn't make a guess this time.";
+    lesson = "Next case, pick a suspect before the reveal and see if you can out-think Goldilocks.";
+  } else if (culprits.includes(g)) {
+    const key = (t.clues ?? []).find((c) => c.honest && c.pointsTo === g);
+    verdict = `You guessed ${name(g)}. Correct!${accused && !culprits.includes(accused) ? " You beat Goldilocks, who accused the wrong bear." : ""}`;
+    lesson = key ? `The clue that cracked it: Exhibit ${key.exhibit}. ${key.why}` : "You read the testimony right: the guilty bear's story didn't hold together.";
+  } else {
+    verdict = `You guessed ${name(g)}. Not this time: it was ${culprits.map(name).join(" and ") || "nobody in the family"}.`;
+    const framed = t.framed?.find((f) => f.target === g);
+    if (framed) lesson = `Planted evidence fooled you. ${name(framed.by)} smeared crumbs on ${name(g)}'s chair. Evidence can be faked, so ask who benefits from it.`;
+    else if ((t.secretsOut ?? []).includes(g)) lesson = `A secret isn't a confession. ${name(g)}'s secret came out, but it had nothing to do with the pie. That's a red herring.`;
+    else if (liars.has(g)) lesson = `Liars aren't always thieves. ${name(g)} lied to protect a different secret, not to cover up the pie.`;
+    else if (g === accused) lesson = "You followed the detective. Even Goldilocks gets it wrong, so trust the evidence, not the confidence.";
+    else lesson = "The physical evidence pointed elsewhere. Fur, crumbs and clocks don't lie, but bears do.";
+  }
+  $("#debrief").innerHTML = `<h2>Detective debrief</h2>
+    <p class="verdict ${g && culprits.includes(g) ? "right" : "wrong"}">${escapeHtml(verdict)}</p>
+    <p class="lesson"><b>Lesson:</b> ${escapeHtml(lesson)}</p>
+    <ol class="clues">${(t.clues ?? [])
+      .map((c) => `<li><span class="label ${c.honest ? "lead" : "herring"}">${c.honest ? (c.pointsTo ? "True lead" : "Background") : "Red herring"}</span> <b>Exhibit ${c.exhibit}:</b> ${escapeHtml(c.line)} <i>${escapeHtml(c.why)}</i></li>`)
+      .join("")}${(t.secretsOut ?? []).map((s) => `<li><span class="label herring">Red herring</span> <b>${escapeHtml(name(s))}'s secret</b> came out, but it wasn't about the pie.</li>`).join("")}</ol>`;
+  $("#debrief").hidden = false;
 }
 
 async function showEnd() {
+  renderDebrief();
   setCamera(WIDE);
   const stats = await (await fetch("/api/stats")).json();
   const e = state.run.ending;

@@ -60,7 +60,7 @@ export type BeatKind =
   | "respond"
   | "reveal";
 
-export const MOODS = ["😇", "😰", "😤", "😏", "😭", "🙄", "😳", "🤐", "😋", "🧐", "😱", "🥹"] as const;
+export const MOODS = ["calm", "nervous", "smug", "angry", "sad", "shocked", "sly", "innocent", "hungry", "suspicious"] as const;
 
 export interface Beat {
   i: number;
@@ -109,6 +109,10 @@ export interface Truth {
   framed: { by: SuspectId; target: SuspectId }[];
   culprits: SuspectId[];
   slicesLeft: number;
+  /** the exhibits shown in the film, with what they really mean (for the debrief) */
+  clues?: { exhibit: string; line: string; pointsTo: SuspectId | null; honest: boolean; why: string }[];
+  /** secrets that slipped out during questioning (red herrings) */
+  secretsOut?: SuspectId[];
 }
 
 export type EndingId = "case_closed" | "caught_denying" | "framed" | "wrong_suspect" | "detective_did_it";
