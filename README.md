@@ -42,6 +42,8 @@ Setup `ID` is shown on screen and never changes. **Everything after it is decide
 
 ## Sponsor tools
 
+Full details, with where each one lives in the code: [TOOLS.md](TOOLS.md).
+
 | Tool | Job in the film |
 |---|---|
 | **Bruin** | Every decision from every film is published to a public feed (`/api/decisions.csv`). The Bruin pipeline in [`bruin/`](bruin) ingests it and builds `analytics.accusations`, `analytics.lies` and `analytics.endings`, with quality checks |
