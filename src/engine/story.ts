@@ -30,6 +30,27 @@ import {
 } from "./types.js";
 
 const TOTAL_SLICES = 8;
+const RADIO_TOPICS = [
+  "zoo animal news",
+  "wildlife rescue news",
+  "bear sighting news",
+  "national park news",
+  "Thanksgiving food news",
+  "pumpkin record news",
+  "raccoon news",
+  "funny pet news",
+  "bakery news",
+  "farm animal news",
+  "weird weather news",
+  "owl news",
+];
+// Keep the radio family-friendly.
+const SAD = /\b(kill|killed|kills|dies|died|dead|death|fire|injur\w*|shoot\w*|attack\w*|crash\w*|euthan\w*|abuse\w*|war|murder\w*|bird flu|disease)\b/i;
+const FALLBACK_HEADLINES = [
+  "Local moose wins pie-eating contest, refuses to share his recipe",
+  "Forest owls report record number of midnight snack complaints",
+  "Squirrel council votes to ban acorn hoarding before the holidays",
+];
 interface Clue {
   line: string;
   focus: NonNullable<Beat["focus"]>;
@@ -358,9 +379,18 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     truth.culprits = SUSPECTS.filter((s) => truth.eaten[s] > 0 || truth.hiddenBy === s);
     beat({ scene: "morning", kind: "title", actor: "narrator", line: "The Morning After" });
     {
-      const { value: r, use: telem } = await webSearch("funny animal news this week");
-      const pickTitle = r.sources.map((x) => x.title.replace(/^watch:?\s+/i, "")).find((t) => t.split(" ").length >= 5 && !/^(top|best)\s+\d/i.test(t) && !/\b(funniest|compilation|week)\b/i.test(t));
-      const headline = (telem.live && pickTitle ? pickTitle : "Local moose wins pie-eating contest, refuses to share his recipe").replace(/\s+[|\-–—]\s+[^|\-–—]+$/, "").slice(0, 110);
+      // A different real story every film: random topic, past week only, no repeats.
+      const topic = RADIO_TOPICS[Math.floor(Math.random() * RADIO_TOPICS.length)];
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+      const { value: r, use: telem } = await webSearch(topic, { numResults: 6, publishedAfter: weekAgo });
+      const played = new Set(pastCases.map((c) => c.headline).filter(Boolean));
+      const clean = (t: string) => t.replace(/^watch:?\s+/i, "").replace(/\s+[|\-–—]\s+[^|\-–—]+$/, "").trim();
+      const options = r.sources
+        .map((x) => clean(x.title))
+        .filter((t) => t.split(" ").length >= 5 && t.length <= 120 && !/^(top|best)\s+\d/i.test(t) && !/\b(funniest|compilation|week|video|photos|live updates)\b/i.test(t) && !SAD.test(t) && !played.has(t));
+      const pickTitle = options[Math.floor(Math.random() * options.length)];
+      const headline = telem.live && pickTitle ? pickTitle : FALLBACK_HEADLINES.filter((h) => !played.has(h))[0] ?? FALLBACK_HEADLINES[0];
+      run.headline = headline;
       beat({ scene: "morning", kind: "radio", actor: "narrator", line: `On the radio: "${headline}."`, sources: r.sources.slice(0, 1), sponsors: [{ ...telem, what: "today's headline" }] });
       for (const c of CAST) memory[c.id].push(`This morning the cabin radio said: "${headline}". You may use it as an alibi, an excuse or a distraction.`);
       spoken.push(`Radio: ${headline}`);
@@ -579,6 +609,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
       truth,
       lies: Object.fromEntries(SUSPECTS.map((s) => [s, run.beats.filter((b) => b.actor === s && b.isLie).length])) as Record<SuspectId, number>,
       lastYear: nextYearMemory(truth, accused, resp.confess),
+      headline: run.headline,
       runUrl,
     });
     onEvent?.({ type: "done", status: "done", truth, ending, caseNumber: run.caseNumber, poster: run.poster });

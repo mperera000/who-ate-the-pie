@@ -145,6 +145,8 @@ export interface Run {
   ending?: Ending;
   lastYear: Partial<Record<CharacterId, string>>;
   weather?: { forest: string; description: string; sky: string; live: boolean };
+  /** the radio headline this case played */
+  headline?: string;
   /** this case's poster (Runware) */
   poster?: string;
 }

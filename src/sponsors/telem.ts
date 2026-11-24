@@ -20,7 +20,7 @@ interface TelemResponse {
   preprocessor_runs?: { output_payload?: { results?: { title?: string; url?: string; summary?: string; rank?: number }[] } }[];
 }
 
-export async function webSearch(query: string) {
+export async function webSearch(query: string, opts: { numResults?: number; publishedAfter?: string } = {}) {
   return withFallback<SearchResult>(
     "Telem",
     `searched "${query}"`,
@@ -29,7 +29,7 @@ export async function webSearch(query: string) {
       const res = await fetch("https://router.telem.ai/v1/search", {
         method: "POST",
         headers: { Authorization: `Bearer ${config.keys.telem}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ user_input: { query }, search: { num_results: 3 } }),
+        body: JSON.stringify({ user_input: { query }, search: { num_results: opts.numResults ?? 3, ...(opts.publishedAfter ? { published_after: opts.publishedAfter } : {}) } }),
         signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok) throw new Error(`Telem HTTP ${res.status}`);
@@ -37,7 +37,7 @@ export async function webSearch(query: string) {
       const results = (body.preprocessor_runs ?? [])
         .flatMap((r) => r.output_payload?.results ?? [])
         .filter((r) => r.title || r.summary)
-        .slice(0, 3);
+        .slice(0, opts.numResults ? opts.numResults * 2 : 3);
       if (!results.length) throw new Error("no results");
       const summary = results.find((r) => r.summary)?.summary ?? results[0].title ?? "";
       return {

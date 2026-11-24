@@ -19,6 +19,8 @@ export interface CaseRecord {
   /** what each character remembers going into the NEXT case */
   lastYear: Partial<Record<CharacterId, string>>;
   runUrl?: string;
+  /** the radio headline this case played, so later films don't repeat it */
+  headline?: string;
 }
 
 const useBlob = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
