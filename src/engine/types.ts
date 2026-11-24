@@ -57,6 +57,8 @@ export type BeatKind =
   | "weather" // tonight's live weather at the cabin
   | "radio" // a real headline on the cabin radio
   | "wildcard" // a random twist
+  | "records" // Forest Police records from Bruin
+  | "factcheck" // Goldilocks fact-checks an alibi with live search
   | "respond"
   | "reveal";
 
@@ -86,6 +88,9 @@ export interface Beat {
   focus?: { kind: "pie" | "chair" | "trail"; who?: SuspectId };
   exhibit?: string;
   verdict?: "too_hot" | "too_cold" | "just_right";
+  /** result of a live fact-check on an alibi */
+  check?: "confirmed" | "busted" | "unclear";
+  claim?: string;
   /** true when this line will never get a voice clip (caption only) */
   silent?: boolean;
 }
@@ -140,4 +145,6 @@ export interface Run {
   ending?: Ending;
   lastYear: Partial<Record<CharacterId, string>>;
   weather?: { forest: string; description: string; sky: string; live: boolean };
+  /** this case's poster (Runware) */
+  poster?: string;
 }

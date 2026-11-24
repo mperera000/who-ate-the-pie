@@ -15,6 +15,7 @@ Detective Goldilocks, Papa Bear, Mama Bear and Baby Bear are each a separate AI 
 - **Cutouts:** background removal turns them into full-body figures that walk around the set
 - **The cabin set:** the storybook cutaway cabin
 - **3D models:** each character turned into a 3D model with Tripo 3D (`web/cast3d.html`)
+- **A poster for every case:** when a film ends, a poster is generated for that exact ending (who got accused, who really did it) and shown on the end card
 - **Voices:** every spoken line, in a distinct voice per character plus a narrator, generated as the film is being made (`src/sponsors/runware.ts`)
 
 ## BAND: private messages between the agents
@@ -27,6 +28,7 @@ Each character is a registered BAND agent. Every film opens its own BAND chat ro
 
 - **Cabin radio:** each morning, Telem finds a real, funny news story from this week, and it plays on the radio. The agents are told about it and can use it as an alibi or a distraction.
 - **Goldilocks's research:** mid-interrogation she can search the live web, and the result and its sources appear on screen.
+- **Live alibi fact-checks:** bears can back their story with a real-world fact (the radio news, tonight's real weather, a real event). Goldilocks searches it on the live web, and a verdict (CONFIRMED, BUSTED or UNVERIFIED) is stamped on screen with the sources.
 - Code: `src/sponsors/telem.ts`
 
 ## Bruin: analyzing every decision across all films
@@ -37,7 +39,9 @@ Every decision from every film (who did what, why, whether it was a lie, how the
 - `analytics.lies`: how often each bear lies when questioned
 - `analytics.endings`: how often each ending happens
 
-Run it with `cd bruin && bruin run --config-file .bruin.yml decisions`.
+**Bruin feeds the next film.** `npm run bruin:sync` runs the pipeline, queries those tables and publishes the results as the "Forest Police records". Every new film loads the latest records: Goldilocks gets her real track record and each bear's lie rate, every bear knows their own reputation ("you lie 88% of the time, and Goldilocks knows it"), and the film opens by showing the records. So the agents' behavior is shaped by Bruin's analysis of every earlier film.
+
+Run it by hand with `cd bruin && bruin run --config-file .bruin.yml decisions`.
 
 - Code: `bruin/` (pipeline), `src/sponsors/bruin.ts` (publishing the rows)
 

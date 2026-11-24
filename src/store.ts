@@ -87,3 +87,37 @@ export async function decisionsCsv(): Promise<string> {
   const file = path.join(config.runsDir, "decisions.csv");
   return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
 }
+
+export interface BruinInsights {
+  generatedAt: string;
+  accusations: { suspect: string; times_accused: number; times_right: number }[];
+  lies: { suspect: string; lies: number; answers: number; lie_rate_pct: number }[];
+  endings: { ending: string; films: number }[];
+}
+
+/** The latest results published by the Bruin pipeline (npm run bruin:sync). */
+export async function latestBruinInsights(): Promise<BruinInsights | null> {
+  try {
+    if (useBlob()) {
+      const { blobs } = await list({ prefix: "bruin/insights-", limit: 1000 });
+      const latest = blobs.sort((a, b) => b.pathname.localeCompare(a.pathname))[0];
+      return latest ? ((await (await fetch(latest.url)).json()) as BruinInsights) : null;
+    }
+    const file = path.join(config.runsDir, "bruin-insights.json");
+    return fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as BruinInsights) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Copy a poster into Blob so it outlives Runware's temporary URL. */
+export async function keepPoster(id: string, url: string): Promise<string> {
+  if (!useBlob()) return url;
+  try {
+    const bytes = await (await fetch(url)).arrayBuffer();
+    const res = await put(`posters/${id}.jpg`, Buffer.from(bytes), { access: "public", addRandomSuffix: false, contentType: "image/jpeg" });
+    return res.url;
+  } catch {
+    return url;
+  }
+}

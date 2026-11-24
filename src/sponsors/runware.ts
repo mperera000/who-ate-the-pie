@@ -1,7 +1,7 @@
 import { runware, uuid } from "../art/runware.js";
 import { config } from "../config.js";
 import type { Character, CharacterId } from "../engine/types.js";
-import { NotWired, withFallback } from "./util.js";
+import { withFallback } from "./util.js";
 
 // Runware: every character speaks with their own voice (xAI TTS through Runware).
 // The returned audio URL is hosted by Runware, so nothing needs storing.
@@ -38,9 +38,18 @@ export async function voiceLine(speaker: Character | "narrator", line: string) {
   );
 }
 
-export async function renderImage(prompt: string) {
-  return withFallback<string | null>("Runware", "render image", config.keys.runware, async () => {
-    void prompt;
-    throw new NotWired();
-  }, () => null);
+export async function renderImage(prompt: string, width = 768, height = 1024) {
+  return withFallback<string | null>(
+    "Runware",
+    "case poster (FLUX.2)",
+    config.keys.runware,
+    async () => {
+      const [result] = await runware<{ imageURL?: string }>([
+        { taskType: "imageInference", taskUUID: uuid(), model: "runware:400@1", positivePrompt: prompt, negativePrompt: "text, letters, words, watermark, logo, blurry", width, height, numberResults: 1, outputType: "URL", outputFormat: "JPG" },
+      ]);
+      if (!result?.imageURL) throw new Error("no imageURL");
+      return result.imageURL;
+    },
+    () => null,
+  );
 }

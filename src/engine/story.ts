@@ -5,11 +5,11 @@ import { openCaseRoom, whisper } from "../sponsors/band.js";
 import { recordRun } from "../sponsors/bruin.js";
 import { equipSkill } from "../sponsors/finch.js";
 import { lookupFact } from "../sponsors/glasser.js";
-import { voiceLine } from "../sponsors/runware.js";
+import { renderImage, voiceLine } from "../sponsors/runware.js";
 import { webSearch } from "../sponsors/telem.js";
 import { casebook } from "../stats.js";
 import { WILDCARDS, liveWeather, weatherRules } from "../world.js";
-import { listCases, saveCase, saveRun } from "../store.js";
+import { keepPoster, latestBruinInsights, listCases, saveCase, saveRun, type BruinInsights } from "../store.js";
 import { Brain } from "./brain.js";
 import { CAST, OPENING, byId, nameOf } from "./cast.js";
 import { offlineAccuse, offlineAnswer, offlineDetective, offlineMidnight, offlinePlan, offlineReact, offlineResponse } from "./offline.js";
@@ -89,6 +89,7 @@ const answerSchema = (id: SuspectId) =>
     reason: z.string().describe("Your real motive for answering this way, one sentence"),
     mood,
     move_to: z.enum(["stay", "kitchen", "parlour", "bedroom"]).describe("Where you walk off to after answering, or stay"),
+    alibi_fact: z.string().describe("Optional: one real-world fact you cite to back up your story (something from the radio news, tonight's real weather, a real event or game). Goldilocks may fact-check it on the live web. Empty if none."),
     blurt_secret: nobodyOr([KNOWS[id]]).describe("Blurt out the secret you know about another bear to shift suspicion (dramatic!), or nobody"),
     whisper_to: nobodyOr(others(id)).describe("Privately message one other bear afterwards, or nobody"),
     whisper: z.string().describe("The private message, 12 words or fewer, empty if nobody"),
@@ -106,6 +107,12 @@ const verdictSchema = z.object({
   verdict: z.enum(["too_hot", "too_cold", "just_right"]).describe("Your famous test: too_hot = you think it's a lie, too_cold = evasive, just_right = you believe it"),
   quip: z.string().describe("Your verdict out loud, Goldilocks-style, 8 words or fewer, e.g. 'Too hot! That answer is burning with lies.'"),
   reason: z.string().describe("Why, one sentence"),
+});
+
+const factcheckSchema = z.object({
+  check: z.enum(["confirmed", "busted", "unclear"]).describe("confirmed if the search results support the claim, busted if they contradict it, unclear otherwise"),
+  line: z.string().describe("What you announce, Sherlock-style, 14 words or fewer"),
+  reason: z.string().describe("What in the search results decided it, one sentence"),
 });
 
 const accuseSchema = z.object({
@@ -134,7 +141,7 @@ export type StreamEvent =
   | { type: "start"; run: Omit<Run, "beats"> }
   | { type: "beat"; beat: Beat }
   | { type: "patch"; i: number; audio: string; sponsors: SponsorUse[] }
-  | { type: "done"; status: Run["status"]; truth?: Truth; ending?: Ending; caseNumber: number }
+  | { type: "done"; status: Run["status"]; truth?: Truth; ending?: Ending; caseNumber: number; poster?: string }
   | { type: "error"; message: string };
 
 function newRunId() {
@@ -146,7 +153,7 @@ function newRunId() {
 
 export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<Run> {
   const brain = new Brain();
-  const [pastCases, weather] = await Promise.all([listCases(), liveWeather()]);
+  const [pastCases, weather, records] = await Promise.all([listCases(), liveWeather(), latestBruinInsights()]);
   const book = casebook(pastCases);
   const run: Run = {
     id: newRunId(),
@@ -170,7 +177,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
   const voices: Promise<void>[] = [];
   const voiced = (b: Beat) =>
     Boolean(b.line) &&
-    ["say", "accuse", "respond", "react", "narrate", "reveal", "evidence", "verdict", "secret", "weather", "radio", "wildcard"].includes(b.kind) &&
+    ["say", "accuse", "respond", "react", "narrate", "reveal", "evidence", "verdict", "secret", "weather", "radio", "wildcard", "records", "factcheck"].includes(b.kind) &&
     b.scene !== "cast" &&
     !(b.kind === "reveal" && b.actor !== "narrator") &&
     !b.line!.startsWith("Same setup") &&
@@ -219,6 +226,18 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
       if (run.lastYear[c.id]) beat({ scene: "cast", kind: "memory", actor: c.id, line: `Remembers last Thanksgiving: ${run.lastYear[c.id]}` });
     }
     beat({ scene: "cast", kind: "memory", actor: "goldilocks", line: `Opens her casebook. ${book.onScreen}` });
+    if (records) {
+      const liar = [...records.lies].sort((a, b) => b.lie_rate_pct - a.lie_rate_pct)[0];
+      const most = [...records.accusations].sort((a, b) => b.times_accused - a.times_accused)[0];
+      beat({
+        scene: "cast",
+        kind: "records",
+        actor: "narrator",
+        line: `Forest Police records: ${liar ? `${nameOf(liar.suspect as SuspectId)} lies ${Math.round(liar.lie_rate_pct)}% of the time.` : ""} ${most ? `${nameOf(most.suspect as SuspectId)} is the usual suspect.` : ""}`.trim(),
+        reason: "Every bear knows the records, and so does Goldilocks.",
+        sponsors: [{ sponsor: "Bruin", what: `records from ${records.endings.reduce((n, e) => n + e.films, 0)} films`, live: true }],
+      });
+    }
 
     const system = (id: CharacterId) => {
       const c = byId(id);
@@ -231,6 +250,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
         run.lastYear[id] ? `Memory from last Thanksgiving: ${run.lastYear[id]}` : "",
         id === "goldilocks" ? book.prompt : "",
         weatherRules(weather),
+        recordsBrief(records, id),
         "Nothing is scripted: you decide what you do. Lying is allowed when it serves your goal, but always fill in is_lie honestly. This is a 90-second film, so every spoken line must be short, punchy, funny and family-friendly.",
       ]
         .filter(Boolean)
@@ -426,7 +446,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
         `${nameOf(target)}: answer`,
         answerSchema(target),
         system(target),
-        `You're in the ${where[target]}. Detective Goldilocks just asked you, in front of everyone: "${q.question}"\n\n${context(target)}\n\nAnswer her. Then decide whether to walk off somewhere and whether to privately message another bear.`,
+        `You're in the ${where[target]}. Detective Goldilocks just asked you, in front of everyone: "${q.question}"\n\n${context(target)}\n\nAnswer her. You can back your story with a real-world fact (the radio news, tonight's weather, a real event), but she may check it on the live web. Then decide whether to walk off somewhere and whether to privately message another bear.`,
         () => offlineAnswer(target, others(target), guilty),
       );
       beat({ scene: "interrogation", kind: "say", actor: target, target: "goldilocks", line: a.answer, reason: a.reason, isLie: a.is_lie, mood: a.mood, sponsors: [aUse] });
@@ -440,6 +460,23 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
         beat({ scene: "interrogation", kind: "secret", actor: target, target: exposed, line, reason: "Deflecting suspicion onto someone else." });
         spoken.push(`${nameOf(target)} (blurting): ${SECRET_SLIP[exposed]}`);
         for (const c of CAST) memory[c.id].push(`Everyone just learned: ${SECRET_SLIP[exposed]}`);
+      }
+
+      // Live fact-check (Telem) of a real-world claim in the alibi, once per film.
+      if (a.alibi_fact.trim() && !run.beats.some((b) => b.kind === "factcheck")) {
+        const claim = a.alibi_fact.trim();
+        const { value: found, use: telem } = await webSearch(claim);
+        const { value: fc, use: fcUse } = await brain.decide(
+          "Goldilocks: fact-check",
+          factcheckSchema,
+          system("goldilocks"),
+          `${nameOf(target)} backed their story with this claim: "${claim}". You searched the live web. Results:\n${found.summary}\nSources: ${found.sources.map((s) => s.title).join("; ")}\n\nDoes the evidence confirm or bust the claim?`,
+          () => ({ check: "unclear" as const, line: "The web is silent on that. Suspicious.", reason: "No clear results." }),
+        );
+        beat({ scene: "interrogation", kind: "factcheck", actor: "goldilocks", target, line: fc.line, reason: fc.reason, claim, check: fc.check, sources: found.sources.slice(0, 2), sponsors: [{ ...telem, what: `fact-check: ${claim.slice(0, 40)}` }, fcUse] });
+        memory.goldilocks.push(`You fact-checked ${nameOf(target)}'s claim "${claim}": ${fc.check}.`);
+        for (const c of CAST) if (c.id !== "goldilocks") memory[c.id].push(`Goldilocks fact-checked ${nameOf(target)}'s claim "${claim}" on the web: ${fc.check.toUpperCase()}.`);
+        spoken.push(`Detective Goldilocks (fact-check): ${fc.line}`);
       }
 
       // Goldilocks's "just right" test on the answer.
@@ -508,6 +545,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
 
     // ---- Scene 5: The reveal ----
     const ending = decideEnding(truth, accused, resp.confess);
+    const posterJob = renderImage(posterPrompt(ending, truth, accused));
     run.truth = truth;
     run.ending = ending;
     beat({ scene: "reveal", kind: "title", actor: "narrator", line: "What Really Happened" });
@@ -529,6 +567,8 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
     const { use: bruinUse } = await recordRun(run);
     beat({ scene: "reveal", kind: "narrate", actor: "narrator", line: `Same setup, ${SETUP_ID}, every time. Every choice after it was made by the characters.`, sponsors: [bruinUse] });
     await Promise.allSettled(voices);
+    const poster = await posterJob;
+    if (poster.value) run.poster = await keepPoster(run.id, poster.value);
     const runUrl = await saveRun(run);
     await saveCase({
       id: run.id,
@@ -541,7 +581,7 @@ export async function generateRun(onEvent?: (e: StreamEvent) => void): Promise<R
       lastYear: nextYearMemory(truth, accused, resp.confess),
       runUrl,
     });
-    onEvent?.({ type: "done", status: "done", truth, ending, caseNumber: run.caseNumber });
+    onEvent?.({ type: "done", status: "done", truth, ending, caseNumber: run.caseNumber, poster: run.poster });
     console.log(`[run ${run.id}] Case #${run.caseNumber}: ${ending.title}. ${brain.calls} Claude calls, ${brain.failures} fell back offline`);
   } catch (error) {
     run.status = "error";
@@ -592,3 +632,33 @@ function nextYearMemory(truth: Truth, accused: SuspectId, confessed: boolean): R
 }
 
 export type { Visit };
+
+/** What the Bruin records tell each character going into this case. */
+function recordsBrief(records: BruinInsights | null, id: CharacterId) {
+  if (!records) return "";
+  const films = records.endings.reduce((n, e) => n + e.films, 0);
+  const lies = records.lies.map((l) => `${nameOf(l.suspect as SuspectId)} lies ${Math.round(l.lie_rate_pct)}% of the time`).join(", ");
+  const acc = records.accusations.map((a) => `${nameOf(a.suspect as SuspectId)} accused ${a.times_accused}× (guilty ${a.times_right}×)`).join(", ");
+  if (id === "goldilocks") return `Forest Police records from ${films} past films (Bruin): ${lies}. ${acc}. Use them, but remember records aren't proof.`;
+  const me = records.lies.find((l) => l.suspect === id);
+  return `Everyone has seen the Forest Police records (Bruin): ${lies}. ${me ? `Your own record: you lie ${Math.round(me.lie_rate_pct)}% of the time, and Goldilocks knows it.` : ""}`;
+}
+
+const LOOKS: Record<CharacterId, string> = {
+  goldilocks: "a tiny girl detective with a huge cloud of golden curls, a houndstooth deerstalker hat and a tweed cape, holding a magnifying glass",
+  papa: "a huge burly brown bear in a red plaid flannel shirt and suspenders",
+  mama: "a tall honey-gold bear with a long neck, a pink cardigan, pearls and a pumpkin apron",
+  baby: "a tiny peach-colored bear cub with a giant head, a striped shirt and red overalls",
+};
+
+/** A poster for this exact ending. */
+function posterPrompt(ending: Ending, truth: Truth, accused: SuspectId) {
+  const culprit = truth.culprits[0];
+  const scene =
+    ending.id === "detective_did_it"
+      ? `${LOOKS.goldilocks} caught red-handed with pumpkin pie crumbs on her face while ${LOOKS.papa}, ${LOOKS.mama} and ${LOOKS.baby} stare at her in shock`
+      : ending.id === "case_closed" || ending.id === "caught_denying"
+        ? `${LOOKS.goldilocks} pointing her magnifying glass at ${LOOKS[accused]}, who is caught holding a slice of pumpkin pie${ending.id === "caught_denying" ? " and protesting innocently" : " and looking guilty"}`
+        : `${LOOKS.goldilocks} accusing ${LOOKS[accused]}, who looks shocked and innocent, while behind them ${culprit ? LOOKS[culprit] : "a shadowy figure"} sneaks away with the pumpkin pie`;
+  return `Storybook movie poster illustration, portrait composition: ${scene}. Inside a cozy log cabin by the fireplace, dramatic warm spotlight, soft watercolor and gouache style, whimsical, family-friendly, no text.`;
+}

@@ -10,7 +10,8 @@
     "film": "tsx src/cli.ts",
     "film:offline": "MOCK=1 tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "art": "tsx src/art/cli.ts"
+    "art": "tsx src/art/cli.ts",
+    "bruin:sync": "tsx src/tools/bruin-sync.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0",

@@ -504,6 +504,28 @@ async function showBeat(b, token) {
       await speakAtLeast(b, token);
       return;
     }
+    case "records": {
+      stamp("Police records", "exhibit");
+      caption(b.line);
+      logEntry(b);
+      pin({ tag: "Forest Police records (Bruin)", text: b.line.replace(/^Forest Police records: /, "") });
+      await speakAtLeast(b, token);
+      return;
+    }
+    case "factcheck": {
+      const label = { confirmed: "Confirmed", busted: "Busted", unclear: "Unverified" }[b.check] ?? "";
+      const card = $("#research");
+      card.innerHTML = `<b>Live fact-check (Telem)</b><br/>Claim: "${escapeHtml(b.claim ?? "")}"${b.sources?.length ? `<small>Sources: ${b.sources.map((s) => escapeHtml(s.title)).join(" · ")}</small>` : ""}`;
+      card.className = "research fade-in";
+      card.hidden = false;
+      showBubble("goldilocks", b.line);
+      stamp(label, b.check === "busted" ? "" : b.check === "confirmed" ? "just_right" : "too_cold");
+      if (b.check === "busted" && b.target) setTimeout(() => animate(b.target, "shake", 900), 400);
+      logEntry(b);
+      pin({ tag: `Fact-check · ${label}`, text: b.claim ?? "", kind: b.check === "busted" ? "too_hot" : b.check === "confirmed" ? "just_right" : "too_cold" });
+      await speakAtLeast(b, token);
+      return;
+    }
     case "evidence": {
       $("#stage").classList.add("clue-focus");
       if (b.focus?.kind === "trail") crumbTrail(b.focus.who);
@@ -685,13 +707,13 @@ async function showEnd() {
   const stats = await (await fetch("/api/stats")).json();
   const e = state.run.ending;
   if (!e) return;
-  $("#end").innerHTML = `<div class="fade-in">
+  $("#end").innerHTML = `<div class="fade-in end-wrap">${state.run.poster ? `<img class="poster" src="${state.run.poster}" alt="Case poster"/>` : ""}<div>
     <p class="stats">THE ENDING THE AGENTS CHOSE · CASE #${state.run.caseNumber}</p>
     <h2>${escapeHtml(e.title)}</h2>
     <p class="summary">${escapeHtml(e.summary)}</p>
     ${endingsGrid(stats.recent)}
     <p class="stats">Same setup (${state.run.setupId}) every time. Across <b>${stats.runs}</b> films, Goldilocks was right <b>${stats.correct}</b> times and the bears told <b>${stats.lies}</b> lies.</p>
-  </div>`;
+  </div></div>`;
   $("#end").hidden = false;
 }
 
@@ -739,7 +761,7 @@ async function newRun() {
             b.audio = e.audio;
             b.sponsors = e.sponsors;
           }
-        } else if (e.type === "done") Object.assign(state.run, { status: "done", truth: e.truth, ending: e.ending });
+        } else if (e.type === "done") Object.assign(state.run, { status: "done", truth: e.truth, ending: e.ending, poster: e.poster });
         else if (e.type === "error") Object.assign(state.run, { status: "error", error: e.message });
       }
     }

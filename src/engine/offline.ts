@@ -71,6 +71,7 @@ export function offlineAnswer(id: SuspectId, others: SuspectId[], guilty: boolea
     reason: guilty ? "Can't let them know." : "Telling it like it is.",
     mood: guilty ? pick(["nervous", "innocent", "shocked"] as const) : pick(["angry", "calm", "innocent"] as const),
     move_to: chance(0.3) ? pick(["kitchen", "bedroom"] as const) : ("stay" as const),
+    alibi_fact: "",
     blurt_secret: "nobody" as string,
     whisper_to: whisperTo,
     whisper: whisperTo === "nobody" ? "" : "Back me up and the last slice is yours.",

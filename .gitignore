@@ -20,3 +20,5 @@ __pycache__/
 logs/queriesweb/assets/scenes/v1/
 web/assets/scenes/v2/
 web/assets/scenes/v3/
+
+logs/queries
